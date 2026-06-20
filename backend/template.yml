@@ -78,6 +78,15 @@ Resources:
     Type: AWS::Serverless::HttpApi
     Properties:
       StageName: !Ref Environment
+      Auth:
+        Authorizers:
+          LambdaAuthorizer:
+            AuthorizerPayloadFormatVersion: "1.0"
+            FunctionArn: !GetAtt AuthorizerFunction.Arn
+            Identity:
+              Headers:
+                - Authorization
+              ReauthorizeEvery: 300
       CorsConfiguration:
         AllowOrigins:
           - '*'
