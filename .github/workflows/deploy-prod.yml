@@ -34,15 +34,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Ensure SSM parameter exists
-        run: |
-          aws ssm put-parameter \
-            --name "/hobbydb/auth-secret" \
-            --value "${{ secrets.AUTH_SECRET_PROD }}" \
-            --type SecureString \
-            --overwrite \
-            --region ${{ env.AWS_REGION }} || true
-
       - name: Deploy with SAM
         working-directory: backend
         run: |
@@ -51,7 +42,7 @@ jobs:
             --stack-name ${{ env.STACK_NAME }} \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
             --region ${{ env.AWS_REGION }} \
-            --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
+            --parameter-overrides Environment=${{ env.ENVIRONMENT }} AuthSecret=${{ secrets.AUTH_SECRET_PROD }} \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
             --resolve-s3
