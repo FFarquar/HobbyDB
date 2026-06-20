@@ -1,0 +1,32 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.stage
+.env.prod
+*.local
+
+# AWS SAM / CloudFormation
+.aws-sam/
+samconfig.toml
+packaged-template.yml
+
+# Build outputs
+frontend/dist/
+backend/.aws-sam/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+#secrets file for aws access
+*.csv

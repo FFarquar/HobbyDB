@@ -1,0 +1,501 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: HobbyDB Backend - Collections, Groups, Items tracking with authentication
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [stage, prod]
+    Description: Deployment environment
+  AuthSecret:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /hobbydb/auth-secret
+    Description: JWT signing secret from SSM Parameter Store
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Timeout: 30
+    MemorySize: 256
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref HobbyDBTable
+        BUCKET_NAME: !Ref ImagesBucket
+        AUTH_SECRET: !Ref AuthSecret
+        ENVIRONMENT: !Ref Environment
+
+Resources:
+
+  # ─── DynamoDB ───────────────────────────────────────────────────────────────
+  HobbyDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub hobbydb-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: GSI1PK
+          AttributeType: S
+        - AttributeName: GSI1SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: GSI1PK
+              KeyType: HASH
+            - AttributeName: GSI1SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # ─── S3 ─────────────────────────────────────────────────────────────────────
+  ImagesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub hobbydb-images-${Environment}-${AWS::AccountId}
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST, DELETE, HEAD]
+            AllowedOrigins: ['*']
+            MaxAge: 3600
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # ─── API Gateway ─────────────────────────────────────────────────────────────
+  HobbyDBApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref Environment
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+
+  # ─── IAM Role ────────────────────────────────────────────────────────────────
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub hobbydb-lambda-role-${Environment}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: HobbyDBPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:BatchWriteItem
+                Resource:
+                  - !GetAtt HobbyDBTable.Arn
+                  - !Sub ${HobbyDBTable.Arn}/index/*
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub ${ImagesBucket.Arn}/*
+
+  # ─── Lambda: Login ───────────────────────────────────────────────────────────
+  LoginFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub hobbydb-login-${Environment}
+      CodeUri: src/handlers/
+      Handler: login.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Events:
+        LoginPost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /login
+            Method: POST
+
+  # ─── Lambda: Authorizer ──────────────────────────────────────────────────────
+  AuthorizerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub hobbydb-authorizer-${Environment}
+      CodeUri: src/handlers/
+      Handler: authorizer.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+
+  AuthorizerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt AuthorizerFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+
+  # ─── Lambda: Collections ─────────────────────────────────────────────────────
+  CollectionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub hobbydb-collections-${Environment}
+      CodeUri: src/handlers/
+      Handler: collections.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Events:
+        GetCollections:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /collections
+            Method: GET
+            Auth:
+              Authorizer: LambdaAuthorizer
+        PostCollection:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /collections
+            Method: POST
+            Auth:
+              Authorizer: LambdaAuthorizer
+        PutCollection:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /collections/{id}
+            Method: PUT
+            Auth:
+              Authorizer: LambdaAuthorizer
+        DeleteCollection:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /collections/{id}
+            Method: DELETE
+            Auth:
+              Authorizer: LambdaAuthorizer
+
+  # ─── Lambda: Groups ───────────────────────────────────────────────────────────
+  GroupsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub hobbydb-groups-${Environment}
+      CodeUri: src/handlers/
+      Handler: groups.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Events:
+        GetGroups:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /collections/{collectionId}/groups
+            Method: GET
+            Auth:
+              Authorizer: LambdaAuthorizer
+        PostGroup:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /collections/{collectionId}/groups
+            Method: POST
+            Auth:
+              Authorizer: LambdaAuthorizer
+        PutGroup:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /collections/{collectionId}/groups/{id}
+            Method: PUT
+            Auth:
+              Authorizer: LambdaAuthorizer
+        DeleteGroup:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /collections/{collectionId}/groups/{id}
+            Method: DELETE
+            Auth:
+              Authorizer: LambdaAuthorizer
+
+  # ─── Lambda: Items ────────────────────────────────────────────────────────────
+  ItemsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub hobbydb-items-${Environment}
+      CodeUri: src/handlers/
+      Handler: items.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Events:
+        GetItems:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /groups/{groupId}/items
+            Method: GET
+            Auth:
+              Authorizer: LambdaAuthorizer
+        PostItem:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /groups/{groupId}/items
+            Method: POST
+            Auth:
+              Authorizer: LambdaAuthorizer
+        PutItem:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /groups/{groupId}/items/{id}
+            Method: PUT
+            Auth:
+              Authorizer: LambdaAuthorizer
+        DeleteItem:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /groups/{groupId}/items/{id}
+            Method: DELETE
+            Auth:
+              Authorizer: LambdaAuthorizer
+
+  # ─── Lambda: Lookups ──────────────────────────────────────────────────────────
+  LookupsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub hobbydb-lookups-${Environment}
+      CodeUri: src/handlers/
+      Handler: lookups.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Events:
+        GetLookups:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /lookups/{type}
+            Method: GET
+            Auth:
+              Authorizer: LambdaAuthorizer
+        PostLookup:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /lookups/{type}
+            Method: POST
+            Auth:
+              Authorizer: LambdaAuthorizer
+        PutLookup:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /lookups/{type}/{id}
+            Method: PUT
+            Auth:
+              Authorizer: LambdaAuthorizer
+        DeleteLookup:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /lookups/{type}/{id}
+            Method: DELETE
+            Auth:
+              Authorizer: LambdaAuthorizer
+
+  # ─── Lambda: Paint & Basing Costs ────────────────────────────────────────────
+  CostsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub hobbydb-costs-${Environment}
+      CodeUri: src/handlers/
+      Handler: costs.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Events:
+        GetPaintCosts:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/paint
+            Method: GET
+            Auth:
+              Authorizer: LambdaAuthorizer
+        PutPaintCost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/paint
+            Method: PUT
+            Auth:
+              Authorizer: LambdaAuthorizer
+        GetBasingCosts:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/basing
+            Method: GET
+            Auth:
+              Authorizer: LambdaAuthorizer
+        PutBasingCost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/basing
+            Method: PUT
+            Auth:
+              Authorizer: LambdaAuthorizer
+        GetExchangeRates:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/exchange
+            Method: GET
+            Auth:
+              Authorizer: LambdaAuthorizer
+        PutExchangeRate:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/exchange
+            Method: PUT
+            Auth:
+              Authorizer: LambdaAuthorizer
+        DeleteExchangeRate:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/exchange/{code}
+            Method: DELETE
+            Auth:
+              Authorizer: LambdaAuthorizer
+
+  # ─── Lambda: Reports ──────────────────────────────────────────────────────────
+  ReportsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub hobbydb-reports-${Environment}
+      CodeUri: src/handlers/
+      Handler: reports.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Events:
+        GetReport:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /reports/{type}
+            Method: GET
+            Auth:
+              Authorizer: LambdaAuthorizer
+
+  # ─── Lambda: Images (presigned URLs) ─────────────────────────────────────────
+  ImagesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub hobbydb-images-${Environment}
+      CodeUri: src/handlers/
+      Handler: images.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Events:
+        GetUploadUrl:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /images/upload-url
+            Method: POST
+            Auth:
+              Authorizer: LambdaAuthorizer
+        DeleteImage:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /images/{key}
+            Method: DELETE
+            Auth:
+              Authorizer: LambdaAuthorizer
+
+  # ─── Lambda: Users (admin) ────────────────────────────────────────────────────
+  UsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub hobbydb-users-${Environment}
+      CodeUri: src/handlers/
+      Handler: users.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Events:
+        GetUsers:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /users
+            Method: GET
+            Auth:
+              Authorizer: LambdaAuthorizer
+        PostUser:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /users
+            Method: POST
+            Auth:
+              Authorizer: LambdaAuthorizer
+        PutUser:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /users/{id}
+            Method: PUT
+            Auth:
+              Authorizer: LambdaAuthorizer
+        DeleteUser:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /users/{id}
+            Method: DELETE
+            Auth:
+              Authorizer: LambdaAuthorizer
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub https://${HobbyDBApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+    Export:
+      Name: !Sub hobbydb-api-url-${Environment}
+
+  TableName:
+    Description: DynamoDB table name
+    Value: !Ref HobbyDBTable
+    Export:
+      Name: !Sub hobbydb-table-${Environment}
+
+  BucketName:
+    Description: S3 images bucket name
+    Value: !Ref ImagesBucket
+    Export:
+      Name: !Sub hobbydb-bucket-${Environment}

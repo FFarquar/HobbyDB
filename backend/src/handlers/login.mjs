@@ -1,0 +1,116 @@
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import bcrypt from 'bcryptjs';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const client = new DynamoDBClient({});
+const ddb = DynamoDBDocumentClient.from(client);
+
+const TABLE_NAME = process.env.TABLE_NAME;
+const AUTH_SECRET = (process.env.AUTH_SECRET || 'HobbyDB-dev-secret').trim();
+
+function base64UrlEncode(value) {
+  return Buffer.from(value)
+    .toString('base64')
+    .replace(/=+$/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
+function safeEqual(a, b) {
+  const aBuffer = Buffer.from(a);
+  const bBuffer = Buffer.from(b);
+  if (aBuffer.length !== bBuffer.length) return false;
+  return crypto.timingSafeEqual(aBuffer, bBuffer);
+}
+
+async function verifyPassword(candidate, stored) {
+  if (!stored) return false;
+  if (stored.startsWith('$2')) return bcrypt.compare(candidate, stored);
+  if (stored.startsWith('sha256:')) {
+    const hash = crypto.createHash('sha256').update(candidate).digest('hex');
+    return safeEqual(stored.slice(7), hash);
+  }
+  return safeEqual(stored, candidate);
+}
+
+function signToken(payload) {
+  const header = base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const body = base64UrlEncode(JSON.stringify(payload));
+  const signingInput = `${header}.${body}`;
+  const signature = crypto
+    .createHmac('sha256', AUTH_SECRET)
+    .update(signingInput)
+    .digest('base64')
+    .replace(/=+$/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+  return `${signingInput}.${signature}`;
+}
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+  'Content-Type': 'application/json',
+};
+
+export const handler = async (event) => {
+  const method = event.httpMethod || event.requestContext?.http?.method;
+  if (method !== 'POST') {
+    return { statusCode: 405, headers: corsHeaders, body: JSON.stringify({ message: 'Method not allowed' }) };
+  }
+
+  try {
+    const body = JSON.parse(typeof event.body === 'string' ? event.body : JSON.stringify(event.body || {}));
+    const { loginID, password } = body;
+
+    if (!loginID || !password) {
+      return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ message: 'loginID and password are required' }) };
+    }
+
+    const isLocalMock = !TABLE_NAME || process.env.USE_MOCK === 'true';
+    let user = null;
+
+    if (isLocalMock) {
+      const mockPath = path.resolve(process.cwd(), 'frontend/mockdata/mock-users.json');
+      const mockUsers = JSON.parse(fs.readFileSync(mockPath, 'utf8'));
+      user = mockUsers.find(u => u.loginID === loginID);
+    } else {
+      const result = await ddb.send(new QueryCommand({
+        TableName: TABLE_NAME,
+        KeyConditionExpression: 'PK = :pk AND SK = :sk',
+        ExpressionAttributeValues: { ':pk': `USER#${loginID}`, ':sk': 'PROFILE' },
+      }));
+      user = result.Items?.[0];
+    }
+
+    if (!user || user.active !== true) {
+      return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ message: 'Invalid credentials' }) };
+    }
+
+    const authenticated = await verifyPassword(password, user.passwordHash || user.password || '');
+    if (!authenticated) {
+      return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ message: 'Invalid credentials' }) };
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const token = signToken({
+      sub: user.PK || `USER#${loginID}`,
+      loginID: user.loginID,
+      role: user.role || 'USER',
+      iat: now,
+      exp: now + 3600,
+    });
+
+    return {
+      statusCode: 200,
+      headers: corsHeaders,
+      body: JSON.stringify({ accessToken: token, token, tokenType: 'Bearer', expiresIn: 3600, role: user.role || 'USER' }),
+    };
+  } catch (err) {
+    console.error(err);
+    return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ message: 'Login failed' }) };
+  }
+};

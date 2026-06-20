@@ -1,0 +1,105 @@
+name: Deploy — Stage
+
+on:
+  push:
+    branches: [develop]
+
+env:
+  AWS_REGION: ap-southeast-2
+  STACK_NAME: hobbydb-stage
+  ENVIRONMENT: stage
+
+jobs:
+  deploy-backend:
+    name: Deploy Backend (Stage)
+    runs-on: ubuntu-latest
+    outputs:
+      api_url: ${{ steps.get-url.outputs.api_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci --production
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Ensure SSM parameter exists
+        run: |
+          aws ssm put-parameter \
+            --name "/hobbydb/auth-secret" \
+            --value "${{ secrets.AUTH_SECRET_STAGE }}" \
+            --type SecureString \
+            --overwrite \
+            --region ${{ env.AWS_REGION }} || true
+
+      - name: Deploy with SAM
+        working-directory: backend
+        run: |
+          sam deploy \
+            --template-file template.yml \
+            --stack-name ${{ env.STACK_NAME }} \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --region ${{ env.AWS_REGION }} \
+            --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --resolve-s3
+
+      - name: Get API URL from stack outputs
+        id: get-url
+        run: |
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
+            --output text)
+          echo "api_url=$API_URL" >> "$GITHUB_OUTPUT"
+          echo "Stage API URL: $API_URL"
+
+  deploy-frontend:
+    name: Deploy Frontend (Stage → HobbyDB-Stage Pages)
+    runs-on: ubuntu-latest
+    needs: deploy-backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_API_URL: ${{ needs.deploy-backend.outputs.api_url }}
+          VITE_ENVIRONMENT: stage
+          VITE_BASE_PATH: /HobbyDB-Stage/
+        run: npm run build
+
+      - name: Deploy to HobbyDB-Stage GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          personal_token: ${{ secrets.STAGE_PAGES_TOKEN }}
+          external_repository: FFarquar/HobbyDB-Stage
+          publish_branch: gh-pages
+          publish_dir: frontend/dist
+          cname: ''
