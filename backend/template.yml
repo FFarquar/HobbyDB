@@ -143,8 +143,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub hobbydb-login-${Environment}
-      CodeUri: src/handlers/
-      Handler: login.handler
+      CodeUri: ./
+      Handler: src/handlers/login.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Events:
         LoginPost:
@@ -159,8 +159,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub hobbydb-authorizer-${Environment}
-      CodeUri: src/handlers/
-      Handler: authorizer.handler
+      CodeUri: ./
+      Handler: src/handlers/authorizer.handler
       Role: !GetAtt LambdaExecutionRole.Arn
 
   AuthorizerPermission:
@@ -175,8 +175,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub hobbydb-collections-${Environment}
-      CodeUri: src/handlers/
-      Handler: collections.handler
+      CodeUri: ./
+      Handler: src/handlers/collections.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Events:
         GetCollections:
@@ -217,8 +217,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub hobbydb-groups-${Environment}
-      CodeUri: src/handlers/
-      Handler: groups.handler
+      CodeUri: ./
+      Handler: src/handlers/groups.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Events:
         GetGroups:
@@ -259,8 +259,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub hobbydb-items-${Environment}
-      CodeUri: src/handlers/
-      Handler: items.handler
+      CodeUri: ./
+      Handler: src/handlers/items.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Events:
         GetItems:
@@ -301,8 +301,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub hobbydb-lookups-${Environment}
-      CodeUri: src/handlers/
-      Handler: lookups.handler
+      CodeUri: ./
+      Handler: src/handlers/lookups.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Events:
         GetLookups:
@@ -343,8 +343,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub hobbydb-costs-${Environment}
-      CodeUri: src/handlers/
-      Handler: costs.handler
+      CodeUri: ./
+      Handler: src/handlers/costs.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Events:
         GetPaintCosts:
@@ -409,8 +409,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub hobbydb-reports-${Environment}
-      CodeUri: src/handlers/
-      Handler: reports.handler
+      CodeUri: ./
+      Handler: src/handlers/reports.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Events:
         GetReport:
@@ -427,8 +427,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub hobbydb-images-${Environment}
-      CodeUri: src/handlers/
-      Handler: images.handler
+      CodeUri: ./
+      Handler: src/handlers/images.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Events:
         GetUploadUrl:
@@ -453,8 +453,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub hobbydb-users-${Environment}
-      CodeUri: src/handlers/
-      Handler: users.handler
+      CodeUri: ./
+      Handler: src/handlers/users.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Events:
         GetUsers:
