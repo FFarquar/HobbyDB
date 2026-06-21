@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HobbyDB Icon Generator</title>
+  <style>
+    body { font-family: sans-serif; padding: 24px; background: #f5f5f5; margin: 0; }
+    h1 { margin: 0 0 16px; color: #1a1a2e; }
+    .instructions {
+      background: #e8f4f8; padding: 14px 18px; border-radius: 8px;
+      margin-bottom: 28px; border-left: 4px solid #2196F3; line-height: 1.6;
+    }
+    code { background: #dce8f0; padding: 1px 5px; border-radius: 3px; font-family: monospace; }
+    .grid { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+    .card {
+      background: white; padding: 16px; border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center;
+    }
+    .card h3 { margin: 0 0 10px; font-size: 14px; color: #555; }
+    canvas { display: block; border: 1px solid #e0e0e0; margin: 0 auto 12px; }
+    button {
+      padding: 8px 18px; background: #1a1a2e; color: white;
+      border: none; border-radius: 6px; cursor: pointer; font-size: 13px;
+    }
+    button:hover { background: #2e2e60; }
+  </style>
+</head>
+<body>
+  <h1>HobbyDB Icon Generator</h1>
+  <div class="instructions">
+    <strong>Steps:</strong>
+    <ol style="margin:8px 0 0; padding-left:20px;">
+      <li>Download each file using the buttons below</li>
+      <li>Create the folder <code>frontend/public/icons/</code></li>
+      <li>Place <code>icon-192.png</code> and <code>icon-512.png</code> inside <code>icons/</code></li>
+      <li>Place <code>apple-touch-icon.png</code> directly in <code>frontend/public/</code></li>
+      <li>Run <code>npm run build</code> in the frontend directory</li>
+    </ol>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <script>
+    const SIZES = [
+      { id: 'c512', size: 512, display: 256, filename: 'icon-512.png',         label: '512×512 — PWA large' },
+      { id: 'c192', size: 192, display: 192, filename: 'icon-192.png',         label: '192×192 — PWA small' },
+      { id: 'c180', size: 180, display: 180, filename: 'apple-touch-icon.png', label: '180×180 — Apple touch' },
+      { id: 'c32',  size: 32,  display: 96,  filename: 'favicon.png',          label: '32×32 — Favicon' },
+    ];
+
+    const grid = document.getElementById('grid');
+    SIZES.forEach(({ id, size, display, filename, label }) => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <h3>${label}</h3>
+        <canvas id="${id}" width="${size}" height="${size}"
+                style="width:${display}px;height:${display}px"></canvas>
+        <button onclick="dl('${id}','${filename}')">&#8659; ${filename}</button>
+      `;
+      grid.appendChild(card);
+      drawIcon(document.getElementById(id));
+    });
+
+    // ── Drawing ──────────────────────────────────────────────────────────────
+
+    function drawIcon(canvas) {
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width;
+      const p = v => v * (W / 512);
+
+      // Background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, W, W);
+      ctx.fillStyle = '#000000';
+
+      if (W <= 32) {
+        // Favicon: just bold "DB"
+        ctx.font = `900 ${p(300)}px Arial, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('DB', p(256), p(270));
+        return;
+      }
+
+      // ── Tank silhouette (facing left) ────────────────────────────────────
+
+      // Track / running gear
+      rr(ctx, p(26), p(210), p(460), p(40), p(20));
+
+      // Hull body — trapezoidal, sloped front glacis plate
+      ctx.beginPath();
+      ctx.moveTo(p(82),  p(220));   // front-bottom
+      ctx.lineTo(p(52),  p(166));   // front-top  (steep glacis)
+      ctx.lineTo(p(462), p(166));   // rear-top
+      ctx.lineTo(p(462), p(220));   // rear-bottom
+      ctx.closePath();
+      ctx.fill();
+
+      // Raised engine deck at rear
+      rr(ctx, p(420), p(151), p(42), p(15), p(4));
+
+      // Turret
+      rr(ctx, p(208), p(113), p(182), p(72), p(10));
+
+      // Commander's cupola
+      rr(ctx, p(332), p(94), p(48), p(23), p(7));
+
+      // Gun mantlet (circle at turret front)
+      circ(ctx, p(208), p(152), p(31));
+
+      // Barrel
+      rr(ctx, p(26), p(144), p(190), p(16), p(8));
+
+      // Muzzle brake (slight bulge at tip)
+      rr(ctx, p(22), p(140), p(15), p(24), p(4));
+
+      // ── "DB" text ────────────────────────────────────────────────────────
+      ctx.font = `900 ${p(112)}px "Arial Black", Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText('DB', p(256), p(435));
+    }
+
+    // Rounded rectangle fill
+    function rr(ctx, x, y, w, h, r) {
+      r = Math.min(r, w / 2, h / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y,     x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x,     y + h, r);
+      ctx.arcTo(x,     y + h, x,     y,     r);
+      ctx.arcTo(x,     y,     x + w, y,     r);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Filled circle
+    function circ(ctx, cx, cy, r) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Download canvas as PNG
+    function dl(id, name) {
+      const a = document.createElement('a');
+      a.download = name;
+      a.href = document.getElementById(id).toDataURL('image/png');
+      a.click();
+    }
+  </script>
+</body>
+</html>
