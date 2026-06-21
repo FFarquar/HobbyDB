@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getGroups, createGroup, updateGroup, deleteGroup } from '../../api/client.js';
 import { useToast } from '../Toast.jsx';
 import { useAuth } from '../../App.jsx';
 import ConfirmDialog from '../ConfirmDialog.jsx';
 import ItemsView from '../items/ItemsView.jsx';
+import ImageGallery from '../ImageGallery.jsx';
 
 export default function GroupsView({ collection, onBack }) {
   const [groups, setGroups] = useState([]);
@@ -145,16 +146,23 @@ function GroupModal({ initial, groupLabel, onSave, onClose }) {
   const [description, setDescription] = useState(initial?.description || '');
   const [notes, setNotes] = useState(initial?.notes || '');
   const [saving, setSaving] = useState(false);
+  const galleryRef = useRef(null);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setSaving(true);
-    await onSave({ name, description, notes });
-    setSaving(false);
+    try {
+      if (galleryRef.current) await galleryRef.current.flush();
+      await onSave({ name, description, notes });
+    } catch {
+      // flush errors are toasted by ImageGallery; save errors by parent
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <span className="modal-title">{initial ? `Edit ${groupLabel}` : `New ${groupLabel}`}</span>
@@ -174,6 +182,11 @@ function GroupModal({ initial, groupLabel, onSave, onClose }) {
               <label>Notes</label>
               <textarea className="form-control" value={notes} onChange={e => setNotes(e.target.value)} />
             </div>
+            {initial && (
+              <div className="form-group">
+                <ImageGallery ref={galleryRef} entityId={initial.id} />
+              </div>
+            )}
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>

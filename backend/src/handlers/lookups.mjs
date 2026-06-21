@@ -38,7 +38,7 @@ async function listLookups(type) {
     ExpressionAttributeValues: { ':pk': `LOOKUP#${type}` },
   }));
 
-  const items = (result.Items || []).sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999) || a.label.localeCompare(b.label));
+  const items = (result.Items || []).sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' }));
   return ok(items);
 }
 
@@ -46,7 +46,7 @@ async function createLookup(type, event) {
   if (!requireAdmin(event)) return { statusCode: 403, headers: {}, body: JSON.stringify({ message: 'Admin only' }) };
 
   const body = JSON.parse(event.body || '{}');
-  const { label, abbreviation, sortOrder } = body;
+  const { label, abbreviation } = body;
   if (!label) return badRequest('label is required');
 
   const id = newId();
@@ -58,7 +58,6 @@ async function createLookup(type, event) {
     type,
     label,
     abbreviation: abbreviation || '',
-    sortOrder: sortOrder ?? 0,
     active: true,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -79,7 +78,6 @@ async function updateLookup(type, id, event) {
 
   if (body.label !== undefined) { updates.push('#label = :label'); exprNames['#label'] = 'label'; exprValues[':label'] = body.label; }
   if (body.abbreviation !== undefined) { updates.push('abbreviation = :abbreviation'); exprValues[':abbreviation'] = body.abbreviation; }
-  if (body.sortOrder !== undefined) { updates.push('sortOrder = :sortOrder'); exprValues[':sortOrder'] = body.sortOrder; }
   if (body.active !== undefined) { updates.push('active = :active'); exprValues[':active'] = body.active; }
 
   const result = await ddb.send(new UpdateCommand({

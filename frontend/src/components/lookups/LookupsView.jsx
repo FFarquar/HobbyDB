@@ -4,6 +4,8 @@ import {
   getPaintCosts, upsertPaintCost,
   getBasingCosts, upsertBasingCost,
   getExchangeRates, upsertExchangeRate, deleteExchangeRate,
+  getFigureCosts, upsertFigureCost, deleteFigureCost,
+  getManufacturerNotes, upsertManufacturerNote,
 } from '../../api/client.js';
 import { PAINT_QUALITY_LABELS } from '../../config.js';
 import { useToast } from '../Toast.jsx';
@@ -29,6 +31,7 @@ const SIDEBAR = [
   {
     heading: 'Rate Tables',
     items: [
+      { key: '__FIGURECOST', label: 'Figure Prices',   hint: 'Purchase price per figure — Manufacturer × Scale × Figure Type (with currency)' },
       { key: '__PAINTING',  label: 'Painting Rates',  hint: 'Commercial painting cost per figure (USD) — Scale × Figure Type × Quality' },
       { key: '__BASING',    label: 'Basing Rates',    hint: 'Cost per base (USD) — Base Material × Base Size' },
       { key: '__EXCHANGE',  label: 'Exchange Rates',  hint: 'Conversion rates to AUD for purchase price display' },
@@ -74,6 +77,7 @@ export default function LookupsView() {
       {/* Content pane */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {!isRateTable && <LookupListPanel type={activeKey} hint={sidebarItem?.hint} label={sidebarItem?.label} />}
+        {activeKey === '__FIGURECOST' && <FigureCostPanel />}
         {activeKey === '__PAINTING'  && <PaintingRatesPanel />}
         {activeKey === '__BASING'    && <BasingRatesPanel />}
         {activeKey === '__EXCHANGE'  && <ExchangeRatesPanel />}
@@ -142,13 +146,12 @@ function LookupListPanel({ type, label, hint }) {
           <div className="empty-state"><p>No {label?.toLowerCase()} defined yet.</p></div>
         ) : (
           <table className="data-table">
-            <thead><tr><th>Label</th><th>Abbr.</th><th>Order</th><th style={{ width: 80 }}></th></tr></thead>
+            <thead><tr><th>Label</th><th>Abbr.</th><th style={{ width: 80 }}></th></tr></thead>
             <tbody>
               {items.map(item => (
                 <tr key={item.id}>
                   <td>{item.label}</td>
                   <td style={{ color: 'var(--text-muted)' }}>{item.abbreviation || '—'}</td>
-                  <td style={{ color: 'var(--text-muted)' }}>{item.sortOrder ?? '—'}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button className="btn btn-icon btn-sm" onClick={() => { setEditTarget(item); setShowModal(true); }}>✏️</button>
@@ -175,18 +178,17 @@ function LookupListPanel({ type, label, hint }) {
 function LookupModal({ initial, singularLabel, onSave, onClose }) {
   const [label, setLabel] = useState(initial?.label || '');
   const [abbreviation, setAbbreviation] = useState(initial?.abbreviation || '');
-  const [sortOrder, setSortOrder] = useState(initial?.sortOrder ?? 0);
   const [saving, setSaving] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setSaving(true);
-    await onSave({ label, abbreviation, sortOrder: parseInt(sortOrder) || 0 });
+    await onSave({ label, abbreviation });
     setSaving(false);
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <span className="modal-title">{initial ? `Edit ${singularLabel}` : `Add ${singularLabel}`}</span>
@@ -201,10 +203,6 @@ function LookupModal({ initial, singularLabel, onSave, onClose }) {
             <div className="form-group">
               <label>Abbreviation</label>
               <input className="form-control" value={abbreviation} onChange={e => setAbbreviation(e.target.value)} placeholder="Optional short form" />
-            </div>
-            <div className="form-group">
-              <label>Sort Order</label>
-              <input className="form-control" type="number" value={sortOrder} onChange={e => setSortOrder(e.target.value)} />
             </div>
           </div>
           <div className="modal-footer">
@@ -517,7 +515,7 @@ function ExchangeRateModal({ initial, onSave, onClose }) {
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <span className="modal-title">{initial ? 'Edit Exchange Rate' : 'Add Exchange Rate'}</span>
@@ -566,6 +564,272 @@ function ExchangeRateModal({ initial, onSave, onClose }) {
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+// ─── Figure purchase cost matrix ─────────────────────────────────────────────
+
+function FigureCostPanel() {
+  const [manufacturers, setManufacturers] = useState([]);
+  const [scales, setScales] = useState([]);
+  const [figureTypes, setFigureTypes] = useState([]);
+  const [costs, setCosts] = useState([]);
+  const [currencies, setCurrencies] = useState([]);
+  const [notesMap, setNotesMap] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null);
+  const [addingMfrId, setAddingMfrId] = useState(null);
+  const [addForm, setAddForm] = useState({ scaleId: '', figureTypeId: '', cost: '', currency: '' });
+  const toast = useToast();
+
+  useEffect(() => {
+    Promise.all([
+      getLookups('MANUFACTURER'),
+      getLookups('SCALE'),
+      getLookups('FIGURETYPE'),
+      getFigureCosts(),
+      getExchangeRates(),
+      getManufacturerNotes(),
+    ])
+      .then(([m, s, f, c, rates, notes]) => {
+        setManufacturers(m);
+        setScales(s);
+        setFigureTypes(f);
+        setCosts(c);
+        const sorted = [...rates].sort((a, b) => a.currencyCode.localeCompare(b.currencyCode));
+        setCurrencies(sorted);
+        setAddForm(form => ({ ...form, currency: sorted[0]?.currencyCode || '' }));
+        const map = {};
+        notes.forEach(n => { map[n.manufacturerId] = n.notes || ''; });
+        setNotesMap(map);
+      })
+      .catch(err => toast(err.message, 'error'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  function getCostsForMfr(manufacturerId) {
+    return costs.filter(c => c.manufacturerId === manufacturerId);
+  }
+
+  function getCost(manufacturerId, scaleId, figureTypeId) {
+    return costs.find(c => c.manufacturerId === manufacturerId && c.scaleId === scaleId && c.figureTypeId === figureTypeId) || null;
+  }
+
+  function openAddForm(manufacturerId) {
+    setAddingMfrId(manufacturerId);
+    setAddForm({ scaleId: '', figureTypeId: '', cost: '', currency: currencies[0]?.currencyCode || '' });
+    setEditing(null);
+  }
+
+  async function handleSave(manufacturerId, scaleId, figureTypeId, cost, currency) {
+    try {
+      const updated = await upsertFigureCost({ manufacturerId, scaleId, figureTypeId, cost: parseFloat(cost), currency });
+      setCosts(cs => {
+        const idx = cs.findIndex(c => c.manufacturerId === manufacturerId && c.scaleId === scaleId && c.figureTypeId === figureTypeId);
+        return idx === -1 ? [...cs, updated] : cs.map((c, i) => i === idx ? updated : c);
+      });
+      toast('Price saved', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+    finally { setEditing(null); }
+  }
+
+  async function handleAddSave(manufacturerId) {
+    const { scaleId, figureTypeId, cost, currency } = addForm;
+    if (getCost(manufacturerId, scaleId, figureTypeId)) {
+      toast('That scale / figure type combination already exists for this manufacturer', 'error');
+      return;
+    }
+    try {
+      const updated = await upsertFigureCost({ manufacturerId, scaleId, figureTypeId, cost: parseFloat(cost), currency });
+      setCosts(cs => [...cs, updated]);
+      setAddingMfrId(null);
+      toast('Price added', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
+  async function handleDelete(manufacturerId, scaleId, figureTypeId) {
+    try {
+      await deleteFigureCost(manufacturerId, scaleId, figureTypeId);
+      setCosts(cs => cs.filter(c => !(c.manufacturerId === manufacturerId && c.scaleId === scaleId && c.figureTypeId === figureTypeId)));
+      toast('Price removed', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+    finally { setEditing(null); }
+  }
+
+  async function handleNotesSave(manufacturerId) {
+    const notes = notesMap[manufacturerId] ?? '';
+    try {
+      await upsertManufacturerNote({ manufacturerId, notes });
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
+  const cellStyle = { padding: '3px 6px', fontSize: 13 };
+
+  return (
+    <>
+      <div className="panel-header">
+        <span className="panel-title">Figure Purchase Prices</span>
+      </div>
+      <div className="panel-body">
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+          Add each scale and figure type that a manufacturer sells, with its purchase price. Currencies are restricted to those defined in Exchange Rates.
+        </p>
+        {loading ? (
+          <div className="loading-center"><div className="spinner" /></div>
+        ) : manufacturers.length === 0 ? (
+          <div className="empty-state"><p>Add manufacturers in the Manufacturers lookup first.</p></div>
+        ) : currencies.length === 0 ? (
+          <div className="empty-state"><p>Add currencies in Exchange Rates first before entering figure prices.</p></div>
+        ) : (
+          manufacturers.map(mfr => {
+            const mfrCosts = getCostsForMfr(mfr.id);
+            const isAdding = addingMfrId === mfr.id;
+            const canAdd = !!(addForm.scaleId && addForm.figureTypeId && addForm.cost && addForm.currency);
+            return (
+              <div key={mfr.id} className="card" style={{ marginBottom: 0 }}>
+                <div className="card-header">
+                  <span className="card-title">{mfr.label}</span>
+                  <button className="btn btn-primary btn-sm" onClick={() => openAddForm(mfr.id)}>+ Add Price</button>
+                </div>
+
+                {(mfrCosts.length > 0 || isAdding) && (
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Scale</th>
+                        <th>Figure Type</th>
+                        <th>Price</th>
+                        <th style={{ width: 40 }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mfrCosts.map(entry => {
+                        const key = `${mfr.id}|${entry.scaleId}|${entry.figureTypeId}`;
+                        const scaleLbl = scales.find(s => s.id === entry.scaleId)?.label || entry.scaleId;
+                        const ftLbl = figureTypes.find(f => f.id === entry.figureTypeId)?.label || entry.figureTypeId;
+                        return (
+                          <tr key={key}>
+                            <td>{scaleLbl}</td>
+                            <td>{ftLbl}</td>
+                            <td>
+                              {editing === key ? (
+                                <InlineFigureCostInput
+                                  initialCost={entry.cost}
+                                  initialCurrency={entry.currency}
+                                  currencies={currencies}
+                                  onSave={(cost, currency) => handleSave(mfr.id, entry.scaleId, entry.figureTypeId, cost, currency)}
+                                  onCancel={() => setEditing(null)}
+                                />
+                              ) : (
+                                <span style={{ cursor: 'pointer' }} onClick={() => { setEditing(key); setAddingMfrId(null); }}>
+                                  {entry.currency} {parseFloat(entry.cost).toFixed(2)}
+                                </span>
+                              )}
+                            </td>
+                            <td>
+                              <button className="btn btn-icon btn-sm" onClick={() => handleDelete(mfr.id, entry.scaleId, entry.figureTypeId)}>🗑️</button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {isAdding && (
+                        <tr>
+                          <td>
+                            <select className="form-control" value={addForm.scaleId} onChange={e => setAddForm(f => ({ ...f, scaleId: e.target.value }))} style={cellStyle}>
+                              <option value="">Scale…</option>
+                              {scales.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                            </select>
+                          </td>
+                          <td>
+                            <select className="form-control" value={addForm.figureTypeId} onChange={e => setAddForm(f => ({ ...f, figureTypeId: e.target.value }))} style={cellStyle}>
+                              <option value="">Figure Type…</option>
+                              {figureTypes.map(ft => <option key={ft.id} value={ft.id}>{ft.label}</option>)}
+                            </select>
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                              <input
+                                type="text" inputMode="decimal"
+                                className="form-control"
+                                value={addForm.cost}
+                                onChange={e => setAddForm(f => ({ ...f, cost: e.target.value }))}
+                                style={{ width: 70, ...cellStyle }}
+                                placeholder="0.00"
+                                autoFocus
+                                onKeyDown={e => { if (e.key === 'Enter' && canAdd) handleAddSave(mfr.id); if (e.key === 'Escape') setAddingMfrId(null); }}
+                              />
+                              <select className="form-control" value={addForm.currency} onChange={e => setAddForm(f => ({ ...f, currency: e.target.value }))} style={{ width: 80, ...cellStyle }}>
+                                {currencies.map(r => <option key={r.currencyCode} value={r.currencyCode}>{r.currencyCode}</option>)}
+                              </select>
+                            </div>
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button className="btn btn-sm btn-primary" disabled={!canAdd} onClick={() => handleAddSave(mfr.id)}>✓</button>
+                              <button className="btn btn-sm btn-ghost" onClick={() => setAddingMfrId(null)}>✕</button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                )}
+
+                {mfrCosts.length === 0 && !isAdding && (
+                  <div style={{ padding: '10px 14px', fontSize: 13, color: 'var(--text-muted)' }}>
+                    No prices defined yet. Click + Add Price to begin.
+                  </div>
+                )}
+
+                <div style={{ padding: '6px 12px 12px' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Pricing notes</div>
+                  <textarea
+                    className="form-control"
+                    value={notesMap[mfr.id] ?? ''}
+                    onChange={e => setNotesMap(m => ({ ...m, [mfr.id]: e.target.value }))}
+                    onBlur={() => handleNotesSave(mfr.id)}
+                    style={{ width: '100%', minHeight: 60, fontSize: 13, resize: 'vertical' }}
+                    placeholder="e.g. Free shipping over £50 · sold in packs of 4 · prices in GBP..."
+                  />
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </>
+  );
+}
+
+function InlineFigureCostInput({ initialCost, initialCurrency, currencies, onSave, onCancel }) {
+  const [cost, setCost] = useState(initialCost !== '' ? String(initialCost) : '');
+  const [currency, setCurrency] = useState(initialCurrency || currencies[0]?.currencyCode || '');
+
+  return (
+    <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+      <input
+        className="form-control"
+        type="text" inputMode="decimal"
+        value={cost}
+        onChange={e => setCost(e.target.value)}
+        style={{ width: 70, padding: '3px 6px', fontSize: 13 }}
+        autoFocus
+        onKeyDown={e => { if (e.key === 'Enter') onSave(cost, currency); if (e.key === 'Escape') onCancel(); }}
+      />
+      <select
+        className="form-control"
+        value={currency}
+        onChange={e => setCurrency(e.target.value)}
+        style={{ width: 80, padding: '3px 6px', fontSize: 13 }}
+      >
+        {currencies.map(r => (
+          <option key={r.currencyCode} value={r.currencyCode}>{r.currencyCode}</option>
+        ))}
+      </select>
+      <button className="btn btn-sm btn-primary" onClick={() => onSave(cost, currency)} disabled={!cost || !currency}>✓</button>
+      <button className="btn btn-sm btn-ghost" onClick={onCancel}>✕</button>
     </div>
   );
 }

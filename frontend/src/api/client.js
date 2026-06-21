@@ -71,6 +71,12 @@ export const upsertBasingCost = (data) => api.put('/costs/basing', data);
 export const getExchangeRates = () => api.get('/costs/exchange');
 export const upsertExchangeRate = (data) => api.put('/costs/exchange', data);
 export const deleteExchangeRate = (code) => api.delete(`/costs/exchange/${encodeURIComponent(code)}`);
+export const getFigureCosts = () => api.get('/costs/figure');
+export const upsertFigureCost = (data) => api.put('/costs/figure', data);
+export const deleteFigureCost = (manufacturerId, scaleId, figureTypeId) =>
+  api.delete(`/costs/figure?manufacturerId=${encodeURIComponent(manufacturerId)}&scaleId=${encodeURIComponent(scaleId)}&figureTypeId=${encodeURIComponent(figureTypeId)}`);
+export const getManufacturerNotes = () => api.get('/costs/mfrnotes');
+export const upsertManufacturerNote = (data) => api.put('/costs/mfrnotes', data);
 
 // Reports
 export const getReport = (type) => api.get(`/reports/${type}`);
@@ -82,5 +88,26 @@ export const updateUser = (id, data) => api.put(`/users/${id}`, data);
 export const deleteUser = (id) => api.delete(`/users/${id}`);
 
 // Images
-export const getUploadUrl = (filename, contentType) => api.post('/images/upload-url', { filename, contentType });
-export const deleteImage = (key) => api.delete(`/images/${encodeURIComponent(key)}`);
+export const getImages     = (entityId) => api.get(`/images?entityId=${encodeURIComponent(entityId)}`);
+export const registerImage = (data) => api.post('/images/register', data);
+export const deleteImage   = (key, entityId) =>
+  api.delete(`/images?key=${encodeURIComponent(key)}&entityId=${encodeURIComponent(entityId)}`);
+
+// Handles presigned-URL upload then registers metadata. In mock mode uses a data URL instead.
+export async function uploadImage(file, entityId) {
+  if (USE_MOCK) {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    const key = `mock/${Date.now()}-${file.name}`;
+    await registerImage({ entityId, key, filename: file.name, contentType: file.type, url: dataUrl });
+    return key;
+  }
+  const { uploadUrl, key } = await api.post('/images/upload-url', { filename: file.name, contentType: file.type, entityId });
+  await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
+  await registerImage({ entityId, key, filename: file.name, contentType: file.type });
+  return key;
+}

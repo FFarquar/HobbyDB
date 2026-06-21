@@ -115,7 +115,7 @@ function UserModal({ initial, onSave, onClose }) {
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <span className="modal-title">{initial ? 'Edit User' : 'New User'}</span>

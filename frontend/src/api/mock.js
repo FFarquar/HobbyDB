@@ -147,6 +147,67 @@ export async function mockRequest(method, path, body) {
     store.exchangeRates.splice(idx, 1);
     return null;
   }
+  if (path === '/costs/figure') {
+    if (method === 'GET') return store.figureCosts || [];
+    if (method === 'PUT') {
+      if (!store.figureCosts) store.figureCosts = [];
+      const idx = store.figureCosts.findIndex(c =>
+        c.manufacturerId === body.manufacturerId && c.scaleId === body.scaleId && c.figureTypeId === body.figureTypeId
+      );
+      const item = { ...body, currency: (body.currency || '').toUpperCase(), updatedAt: new Date().toISOString() };
+      if (idx === -1) store.figureCosts.push(item); else store.figureCosts[idx] = item;
+      return item;
+    }
+  }
+  if (path === '/costs/mfrnotes') {
+    if (method === 'GET') return store.manufacturerNotes || [];
+    if (method === 'PUT') {
+      if (!store.manufacturerNotes) store.manufacturerNotes = [];
+      const idx = store.manufacturerNotes.findIndex(n => n.manufacturerId === body.manufacturerId);
+      const item = { ...body, updatedAt: new Date().toISOString() };
+      if (idx === -1) store.manufacturerNotes.push(item); else store.manufacturerNotes[idx] = item;
+      return item;
+    }
+  }
+  if (path.startsWith('/costs/figure') && method === 'DELETE') {
+    if (!store.figureCosts) store.figureCosts = [];
+    const params = new URLSearchParams(path.split('?')[1] || '');
+    const manufacturerId = params.get('manufacturerId');
+    const scaleId = params.get('scaleId');
+    const figureTypeId = params.get('figureTypeId');
+    const idx = store.figureCosts.findIndex(c =>
+      c.manufacturerId === manufacturerId && c.scaleId === scaleId && c.figureTypeId === figureTypeId
+    );
+    if (idx === -1) notFound();
+    store.figureCosts.splice(idx, 1);
+    return null;
+  }
+
+  // ─── IMAGES ───────────────────────────────────────────────────────────────
+  if (path.startsWith('/images')) {
+    const qs = new URLSearchParams(path.split('?')[1] || '');
+    if (!store.images) store.images = {};
+
+    if (method === 'GET') {
+      const entityId = qs.get('entityId');
+      return (store.images[entityId] || []);
+    }
+    if (method === 'POST' && path.includes('/register')) {
+      const { entityId, key, filename, contentType, url } = body;
+      if (!store.images[entityId]) store.images[entityId] = [];
+      const item = { key, filename, contentType, url, uploadedAt: new Date().toISOString() };
+      store.images[entityId].push(item);
+      return item;
+    }
+    if (method === 'DELETE') {
+      const key      = qs.get('key');
+      const entityId = qs.get('entityId');
+      if (entityId && store.images[entityId]) {
+        store.images[entityId] = store.images[entityId].filter(i => i.key !== key);
+      }
+      return null;
+    }
+  }
 
   // ─── REPORTS ──────────────────────────────────────────────────────────────
   const reportMatch = path.match(/^\/reports\/(.+)$/);

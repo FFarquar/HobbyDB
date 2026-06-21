@@ -403,6 +403,46 @@ Resources:
             Method: DELETE
             Auth:
               Authorizer: LambdaAuthorizer
+        GetFigureCosts:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/figure
+            Method: GET
+            Auth:
+              Authorizer: LambdaAuthorizer
+        PutFigureCost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/figure
+            Method: PUT
+            Auth:
+              Authorizer: LambdaAuthorizer
+        DeleteFigureCost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/figure
+            Method: DELETE
+            Auth:
+              Authorizer: LambdaAuthorizer
+        GetManufacturerNotes:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/mfrnotes
+            Method: GET
+            Auth:
+              Authorizer: LambdaAuthorizer
+        PutManufacturerNote:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/mfrnotes
+            Method: PUT
+            Auth:
+              Authorizer: LambdaAuthorizer
 
   # ─── Lambda: Reports ──────────────────────────────────────────────────────────
   ReportsFunction:
@@ -431,6 +471,14 @@ Resources:
       Handler: src/handlers/images.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Events:
+        GetImages:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /images
+            Method: GET
+            Auth:
+              Authorizer: LambdaAuthorizer
         GetUploadUrl:
           Type: HttpApi
           Properties:
@@ -439,11 +487,19 @@ Resources:
             Method: POST
             Auth:
               Authorizer: LambdaAuthorizer
+        RegisterImage:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /images/register
+            Method: POST
+            Auth:
+              Authorizer: LambdaAuthorizer
         DeleteImage:
           Type: HttpApi
           Properties:
             ApiId: !Ref HobbyDBApi
-            Path: /images/{key}
+            Path: /images
             Method: DELETE
             Auth:
               Authorizer: LambdaAuthorizer
