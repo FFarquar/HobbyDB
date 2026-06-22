@@ -6,6 +6,26 @@ import { useAuth } from '../../App.jsx';
 import ConfirmDialog from '../ConfirmDialog.jsx';
 import ItemModal from './ItemModal.jsx';
 
+function buildLastItemTemplate(items, category) {
+  if (!items.length || category !== 'MINIATURE') return null;
+  const last = items[items.length - 1];
+  return {
+    scaleId: last.scaleId,
+    scaleName: last.scaleName,
+    manufacturerId: last.manufacturerId,
+    manufacturerName: last.manufacturerName,
+    nationalityId: last.nationalityId,
+    nationalityName: last.nationalityName,
+    paintQualityId: last.paintQualityId,
+    paintQualityName: last.paintQualityName,
+    baseSizeId: last.baseSizeId,
+    baseSizeName: last.baseSizeName,
+    baseMaterialId: last.baseMaterialId,
+    baseMaterialName: last.baseMaterialName,
+    quantity: 1,
+  };
+}
+
 export default function ItemsView({ collection, group, onBack }) {
   const [items, setItems] = useState([]);
   const [scales, setScales] = useState([]);
@@ -13,7 +33,6 @@ export default function ItemsView({ collection, group, onBack }) {
   const [showModal, setShowModal] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [lastForm, setLastForm] = useState(null);
   const toast = useToast();
   const { auth } = useAuth();
   const isAdmin = auth?.role === 'ADMIN';
@@ -45,7 +64,6 @@ export default function ItemsView({ collection, group, onBack }) {
       } else {
         const created = await createItem(group.id, { ...formData, collectionId: collection.id });
         setItems(is => [...is, created]);
-        setLastForm(formData);
         toast('Item added', 'success');
       }
       setShowModal(false);
@@ -111,7 +129,7 @@ export default function ItemsView({ collection, group, onBack }) {
       {showModal && (
         <ItemModal
           initial={editTarget}
-          template={editTarget ? null : lastForm}
+          template={editTarget ? null : buildLastItemTemplate(items, collection.category)}
           collectionCategory={collection.category}
           groupId={group.id}
           onSave={handleSave}

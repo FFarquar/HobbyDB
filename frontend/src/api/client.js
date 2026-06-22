@@ -29,9 +29,9 @@ async function request(method, path, body, attempt = 0) {
   }
 
   if (res.status === 204) return null;
-  if (res.status === 401) {
+  if (res.status === 401 || res.status === 403) {
     onUnauthorized?.();
-    throw Object.assign(new Error('Session expired. Please log in again.'), { status: 401 });
+    throw Object.assign(new Error('Session expired. Please log in again.'), { status: res.status });
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: res.statusText }));
