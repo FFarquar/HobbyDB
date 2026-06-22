@@ -48,12 +48,18 @@ jobs:
       - name: Deploy with SAM
         working-directory: backend
         run: |
+          AUTH_SECRET=$(aws ssm get-parameter \
+            --name "/hobbydb/auth-secret" \
+            --with-decryption \
+            --query Parameter.Value \
+            --output text \
+            --region ${{ env.AWS_REGION }})
           sam deploy \
             --template-file template.yml \
             --stack-name ${{ env.STACK_NAME }} \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
             --region ${{ env.AWS_REGION }} \
-            --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
+            --parameter-overrides Environment=${{ env.ENVIRONMENT }} AuthSecret="$AUTH_SECRET" \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
             --resolve-s3

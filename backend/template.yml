@@ -8,9 +8,9 @@ Parameters:
     AllowedValues: [stage, prod]
     Description: Deployment environment
   AuthSecret:
-    Type: AWS::SSM::Parameter::Value<String>
-    Default: /hobbydb/auth-secret
-    Description: JWT signing secret from SSM Parameter Store
+    Type: String
+    NoEcho: true
+    Description: JWT signing secret (passed in at deploy time from SSM)
 
 Globals:
   Function:
