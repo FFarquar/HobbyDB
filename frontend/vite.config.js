@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 const base = process.env.VITE_BASE_PATH || '/';
+const isStaging = process.env.VITE_ENVIRONMENT === 'staging';
+const appName = isStaging ? 'HobbyDB Staging' : 'HobbyDB';
 
 export default defineConfig({
   plugins: [
@@ -12,8 +14,8 @@ export default defineConfig({
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
         id: base,
-        name: 'HobbyDB',
-        short_name: 'HobbyDB',
+        name: appName,
+        short_name: appName,
         description: 'Track your hobby collection — miniatures, board games, books and more',
         theme_color: '#1a1a2e',
         background_color: '#1a1a2e',
