@@ -169,6 +169,24 @@ export async function mockRequest(method, path, body) {
       return item;
     }
   }
+  if (path === '/costs/scalefiguretype') {
+    if (!store.scaleFigureTypes) store.scaleFigureTypes = [];
+    if (method === 'GET') return store.scaleFigureTypes;
+    if (method === 'PUT') {
+      const exists = store.scaleFigureTypes.some(l => l.scaleId === body.scaleId && l.figureTypeId === body.figureTypeId);
+      if (!exists) store.scaleFigureTypes.push({ ...body, createdAt: new Date().toISOString() });
+      return { ...body, createdAt: new Date().toISOString() };
+    }
+  }
+  if (path.startsWith('/costs/scalefiguretype') && method === 'DELETE') {
+    if (!store.scaleFigureTypes) store.scaleFigureTypes = [];
+    const params = new URLSearchParams(path.split('?')[1] || '');
+    const scaleId = params.get('scaleId');
+    const figureTypeId = params.get('figureTypeId');
+    const idx = store.scaleFigureTypes.findIndex(l => l.scaleId === scaleId && l.figureTypeId === figureTypeId);
+    if (idx !== -1) store.scaleFigureTypes.splice(idx, 1);
+    return null;
+  }
   if (path.startsWith('/costs/figure') && method === 'DELETE') {
     if (!store.figureCosts) store.figureCosts = [];
     const params = new URLSearchParams(path.split('?')[1] || '');

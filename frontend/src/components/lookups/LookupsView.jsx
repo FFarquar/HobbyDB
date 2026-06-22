@@ -6,6 +6,7 @@ import {
   getExchangeRates, upsertExchangeRate, deleteExchangeRate,
   getFigureCosts, upsertFigureCost, deleteFigureCost,
   getManufacturerNotes, upsertManufacturerNote,
+  getScaleFigureTypes, addScaleFigureType, removeScaleFigureType,
 } from '../../api/client.js';
 import { PAINT_QUALITY_LABELS } from '../../config.js';
 import { useToast } from '../Toast.jsx';
@@ -15,7 +16,7 @@ import ConfirmDialog from '../ConfirmDialog.jsx';
 
 const SIDEBAR = [
   {
-    heading: 'Lookup Lists',
+    heading: 'Miniature Lookups',
     items: [
       { key: 'SCALE',        label: 'Scales',          hint: 'e.g. 6mm, 10mm, 15mm, 25mm' },
       { key: 'MANUFACTURER', label: 'Manufacturers',   hint: 'e.g. AB Miniatures, Essex, Baccus' },
@@ -29,7 +30,7 @@ const SIDEBAR = [
     ],
   },
   {
-    heading: 'Rate Tables',
+    heading: 'Miniature Rates',
     items: [
       { key: '__FIGURECOST', label: 'Figure Prices',   hint: 'Purchase price per figure — Manufacturer × Scale × Figure Type (with currency)' },
       { key: '__PAINTING',  label: 'Painting Rates',  hint: 'Commercial painting cost per figure (USD) — Scale × Figure Type × Quality' },
@@ -146,12 +147,22 @@ function LookupListPanel({ type, label, hint }) {
           <div className="empty-state"><p>No {label?.toLowerCase()} defined yet.</p></div>
         ) : (
           <table className="data-table">
-            <thead><tr><th>Label</th><th>Abbr.</th><th style={{ width: 80 }}></th></tr></thead>
+            <thead>
+              <tr>
+                <th>Label</th>
+                {type === 'SCALE' && <th>Quality Levels</th>}
+                <th style={{ width: 80 }}></th>
+              </tr>
+            </thead>
             <tbody>
               {items.map(item => (
                 <tr key={item.id}>
                   <td>{item.label}</td>
-                  <td style={{ color: 'var(--text-muted)' }}>{item.abbreviation || '—'}</td>
+                  {type === 'SCALE' && (
+                    <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                      {item.qualityNames?.length ? `${item.qualityNames.length}: ${item.qualityNames.join(', ')}` : '—'}
+                    </td>
+                  )}
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button className="btn btn-icon btn-sm" onClick={() => { setEditTarget(item); setShowModal(true); }}>✏️</button>
@@ -166,7 +177,7 @@ function LookupListPanel({ type, label, hint }) {
       </div>
 
       {showModal && (
-        <LookupModal initial={editTarget} singularLabel={singularLabel} onSave={handleSave} onClose={() => { setShowModal(false); setEditTarget(null); }} />
+        <LookupModal initial={editTarget} singularLabel={singularLabel} showAbbreviation={type !== 'SCALE'} showPaintLevels={type === 'SCALE'} onSave={handleSave} onClose={() => { setShowModal(false); setEditTarget(null); }} />
       )}
       {deleteTarget && (
         <ConfirmDialog title={`Delete ${singularLabel}`} message={`Delete "${deleteTarget.label}"?`} danger onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} />
@@ -175,15 +186,19 @@ function LookupListPanel({ type, label, hint }) {
   );
 }
 
-function LookupModal({ initial, singularLabel, onSave, onClose }) {
+function LookupModal({ initial, singularLabel, onSave, onClose, showAbbreviation = true, showPaintLevels = false }) {
   const [label, setLabel] = useState(initial?.label || '');
   const [abbreviation, setAbbreviation] = useState(initial?.abbreviation || '');
+  const [qualityNames, setQualityNames] = useState(
+    initial?.qualityNames?.length ? initial.qualityNames : ['']
+  );
   const [saving, setSaving] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setSaving(true);
-    await onSave({ label, abbreviation });
+    const names = qualityNames.map(n => n.trim()).filter(Boolean);
+    await onSave({ label, abbreviation, ...(showPaintLevels && { qualityNames: names }) });
     setSaving(false);
   }
 
@@ -200,10 +215,36 @@ function LookupModal({ initial, singularLabel, onSave, onClose }) {
               <label>Label *</label>
               <input className="form-control" value={label} onChange={e => setLabel(e.target.value)} required autoFocus />
             </div>
-            <div className="form-group">
-              <label>Abbreviation</label>
-              <input className="form-control" value={abbreviation} onChange={e => setAbbreviation(e.target.value)} placeholder="Optional short form" />
-            </div>
+            {showAbbreviation && (
+              <div className="form-group">
+                <label>Abbreviation</label>
+                <input className="form-control" value={abbreviation} onChange={e => setAbbreviation(e.target.value)} placeholder="Optional short form" />
+              </div>
+            )}
+            {showPaintLevels && (
+              <div className="form-group">
+                <label>Paint Quality Levels</label>
+                {qualityNames.map((name, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 4, alignItems: 'center' }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 12, width: 18, flexShrink: 0 }}>{i + 1}.</span>
+                    <input
+                      className="form-control"
+                      value={name}
+                      onChange={e => setQualityNames(ns => ns.map((n, j) => j === i ? e.target.value : n))}
+                      placeholder={`Level ${i + 1} name`}
+                    />
+                    {qualityNames.length > 1 && (
+                      <button type="button" className="btn btn-icon btn-sm" onClick={() => setQualityNames(ns => ns.filter((_, j) => j !== i))}>✕</button>
+                    )}
+                  </div>
+                ))}
+                {qualityNames.length < 4 && (
+                  <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 4 }} onClick={() => setQualityNames(ns => [...ns, ''])}>
+                    + Add Level
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
@@ -220,17 +261,57 @@ function LookupModal({ initial, singularLabel, onSave, onClose }) {
 function PaintingRatesPanel() {
   const [scales, setScales] = useState([]);
   const [figureTypes, setFigureTypes] = useState([]);
+  const [links, setLinks] = useState([]);
   const [costs, setCosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
+  const [addingToScale, setAddingToScale] = useState(null);
+  const [addFtId, setAddFtId] = useState('');
+  const [quickAddFt, setQuickAddFt] = useState(false);
+  const [editingLevels, setEditingLevels] = useState(null);
+  const [editLevelNames, setEditLevelNames] = useState([]);
   const toast = useToast();
 
+  function getQualityNames(scale) {
+    if (scale?.qualityNames?.length) return scale.qualityNames;
+    const count = scale?.paintLevels ?? Object.keys(PAINT_QUALITY_LABELS).length;
+    return Object.values(PAINT_QUALITY_LABELS).slice(0, count);
+  }
+
+  function openEditLevels(scale) {
+    setEditingLevels(scale.id);
+    setEditLevelNames([...getQualityNames(scale)]);
+    setEditing(null);
+    setAddingToScale(null);
+  }
+
+  async function handleSaveLevels(scaleId) {
+    const names = editLevelNames.map(n => n.trim()).filter(Boolean);
+    if (!names.length) return;
+    try {
+      const updated = await updateLookup('SCALE', scaleId, { qualityNames: names });
+      setScales(ss => ss.map(s => s.id === scaleId ? { ...s, ...updated } : s));
+      toast('Quality levels saved', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+    finally { setEditingLevels(null); }
+  }
+
   useEffect(() => {
-    Promise.all([getLookups('SCALE'), getLookups('FIGURETYPE'), getPaintCosts()])
-      .then(([s, f, c]) => { setScales(s); setFigureTypes(f); setCosts(c); })
+    Promise.all([getLookups('SCALE'), getLookups('FIGURETYPE'), getScaleFigureTypes(), getPaintCosts()])
+      .then(([s, f, l, c]) => { setScales(s); setFigureTypes(f); setLinks(l); setCosts(c); })
       .catch(err => toast(err.message, 'error'))
       .finally(() => setLoading(false));
   }, []);
+
+  function getFigureTypesForScale(scaleId) {
+    const linked = new Set(links.filter(l => l.scaleId === scaleId).map(l => l.figureTypeId));
+    return figureTypes.filter(ft => linked.has(ft.id));
+  }
+
+  function getUnlinkedFigureTypes(scaleId) {
+    const linked = new Set(links.filter(l => l.scaleId === scaleId).map(l => l.figureTypeId));
+    return figureTypes.filter(ft => !linked.has(ft.id));
+  }
 
   function getCost(scaleId, figureTypeId, qualityId) {
     return costs.find(c => c.scaleId === scaleId && c.figureTypeId === figureTypeId && c.qualityId === qualityId)?.costUSD ?? '';
@@ -248,7 +329,41 @@ function PaintingRatesPanel() {
     finally { setEditing(null); }
   }
 
-  const qualityKeys = Object.keys(PAINT_QUALITY_LABELS);
+  async function handleAddFigureType(scaleId) {
+    if (!addFtId) return;
+    try {
+      const link = await addScaleFigureType({ scaleId, figureTypeId: addFtId });
+      setLinks(ls => [...ls, link]);
+      toast('Figure type added', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+    finally { setAddingToScale(null); setAddFtId(''); }
+  }
+
+  async function handleRemoveFigureType(scaleId, figureTypeId) {
+    try {
+      await removeScaleFigureType(scaleId, figureTypeId);
+      setLinks(ls => ls.filter(l => !(l.scaleId === scaleId && l.figureTypeId === figureTypeId)));
+      toast('Figure type removed', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
+  async function handleQuickCreateFigureType(formData) {
+    try {
+      const created = await createLookup('FIGURETYPE', formData);
+      setFigureTypes(fts => [...fts, created]);
+      const link = await addScaleFigureType({ scaleId: addingToScale, figureTypeId: created.id });
+      setLinks(ls => [...ls, link]);
+      toast('Figure type created and linked', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+    finally { setQuickAddFt(false); setAddingToScale(null); setAddFtId(''); }
+  }
+
+  function openAddForScale(scaleId) {
+    setAddingToScale(scaleId);
+    const unlinked = getUnlinkedFigureTypes(scaleId);
+    setAddFtId(unlinked[0]?.id || '');
+    setEditing(null);
+  }
 
   return (
     <>
@@ -257,52 +372,146 @@ function PaintingRatesPanel() {
       </div>
       <div className="panel-body">
         <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
-          Commercial painting rate in USD per figure. Click any cell to edit. Matrix: Scale × Figure Type × Paint Level.
+          Commercial painting rate in USD per figure. Click any cell to edit. Quality level names are configured per scale — use the Edit Levels button on each scale card.
         </p>
         {loading ? (
           <div className="loading-center"><div className="spinner" /></div>
         ) : scales.length === 0 ? (
           <div className="empty-state"><p>Add scales in Scales first.</p></div>
         ) : (
-          scales.map(scale => (
-            <div key={scale.id} className="card" style={{ marginBottom: 0 }}>
-              <div className="card-header"><span className="card-title">{scale.label}</span></div>
-              <div style={{ overflowX: 'auto' }}>
-                <table className="data-table" style={{ minWidth: 360 }}>
-                  <thead>
-                    <tr>
-                      <th>Figure Type</th>
-                      {qualityKeys.map(q => <th key={q}>Level {q}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {figureTypes.map(ft => (
-                      <tr key={ft.id}>
-                        <td>{ft.label}</td>
-                        {qualityKeys.map(q => {
-                          const key = `${scale.id}|${ft.id}|${q}`;
-                          const val = getCost(scale.id, ft.id, q);
-                          return (
-                            <td key={q}>
-                              {editing === key ? (
-                                <InlineCostInput initial={val} onSave={v => handleSave(scale.id, ft.id, q, v)} onCancel={() => setEditing(null)} />
-                              ) : (
-                                <span style={{ cursor: 'pointer', color: val !== '' ? 'var(--text)' : 'var(--text-muted)' }} onClick={() => setEditing(key)}>
-                                  {val !== '' ? `$${parseFloat(val).toFixed(2)}` : '—'}
-                                </span>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
+          scales.map(scale => {
+            const scaleFts = getFigureTypesForScale(scale.id);
+            const unlinked = getUnlinkedFigureTypes(scale.id);
+            const isAdding = addingToScale === scale.id;
+            const scaleQualityNames = getQualityNames(scale);
+            return (
+              <div key={scale.id} className="card" style={{ marginBottom: 0 }}>
+                <div className="card-header">
+                  <span className="card-title">{scale.label}</span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => openEditLevels(scale)}>
+                      Edit Levels ({scaleQualityNames.length})
+                    </button>
+                    <button className="btn btn-primary btn-sm" onClick={() => openAddForScale(scale.id)}>+ Add Figure Type</button>
+                  </div>
+                </div>
+
+                {editingLevels === scale.id && (
+                  <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: 6, borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Paint quality level names for {scale.label}:</div>
+                    {editLevelNames.map((name, i) => (
+                      <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <span style={{ color: 'var(--text-muted)', fontSize: 12, width: 18, flexShrink: 0 }}>{i + 1}.</span>
+                        <input
+                          className="form-control"
+                          value={name}
+                          onChange={e => setEditLevelNames(ns => ns.map((n, j) => j === i ? e.target.value : n))}
+                          placeholder={`Level ${i + 1}`}
+                          style={{ maxWidth: 200 }}
+                          autoFocus={i === 0}
+                        />
+                        {editLevelNames.length > 1 && (
+                          <button type="button" className="btn btn-icon btn-sm" onClick={() => setEditLevelNames(ns => ns.filter((_, j) => j !== i))}>✕</button>
+                        )}
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+                      {editLevelNames.length < 4 && (
+                        <button className="btn btn-ghost btn-sm" onClick={() => setEditLevelNames(ns => [...ns, ''])}>+ Add Level</button>
+                      )}
+                      <button className="btn btn-sm btn-primary" onClick={() => handleSaveLevels(scale.id)}>Save</button>
+                      <button className="btn btn-sm btn-ghost" onClick={() => setEditingLevels(null)}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+                {isAdding && (
+                  <div style={{ padding: '8px 14px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid var(--border)' }}>
+                    {unlinked.length > 0 ? (
+                      <>
+                        <select
+                          className="form-control"
+                          value={addFtId}
+                          onChange={e => setAddFtId(e.target.value)}
+                          style={{ maxWidth: 220 }}
+                          autoFocus
+                        >
+                          {unlinked.map(ft => <option key={ft.id} value={ft.id}>{ft.label}</option>)}
+                        </select>
+                        <button className="btn btn-sm btn-primary" onClick={() => handleAddFigureType(scale.id)}>Add</button>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>All figure types already linked.</span>
+                    )}
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      title="Create a new figure type"
+                      onClick={() => setQuickAddFt(true)}
+                    >+ Create new…</button>
+                    <button className="btn btn-sm btn-ghost" onClick={() => { setAddingToScale(null); setAddFtId(''); }}>Cancel</button>
+                  </div>
+                )}
+
+                {scaleFts.length === 0 && !isAdding ? (
+                  <div style={{ padding: '10px 14px', fontSize: 13, color: 'var(--text-muted)' }}>
+                    No figure types linked to this scale yet. Click + Add Figure Type to begin.
+                  </div>
+                ) : scaleFts.length > 0 && (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="data-table" style={{ minWidth: 360 }}>
+                      <thead>
+                        <tr>
+                          <th>Figure Type</th>
+                          {scaleQualityNames.map((name, i) => <th key={i}>{name}</th>)}
+                          <th style={{ width: 32 }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {scaleFts.map(ft => (
+                          <tr key={ft.id}>
+                            <td>{ft.label}</td>
+                            {scaleQualityNames.map((name, i) => {
+                              const q = String(i + 1);
+                              const key = `${scale.id}|${ft.id}|${q}`;
+                              const val = getCost(scale.id, ft.id, q);
+                              return (
+                                <td key={q}>
+                                  {editing === key ? (
+                                    <InlineCostInput initial={val} onSave={v => handleSave(scale.id, ft.id, q, v)} onCancel={() => setEditing(null)} />
+                                  ) : (
+                                    <span style={{ cursor: 'pointer', color: val !== '' ? 'var(--text)' : 'var(--text-muted)' }} onClick={() => setEditing(key)}>
+                                      {val !== '' ? `$${parseFloat(val).toFixed(2)}` : '—'}
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                            <td>
+                              <button
+                                className="btn btn-icon btn-sm"
+                                title="Remove from this scale"
+                                onClick={() => handleRemoveFigureType(scale.id, ft.id)}
+                                style={{ color: 'var(--text-muted)' }}
+                              >✕</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
+      {quickAddFt && (
+        <LookupModal
+          singularLabel="Figure Type"
+          onSave={handleQuickCreateFigureType}
+          onClose={() => setQuickAddFt(false)}
+        />
+      )}
     </>
   );
 }
@@ -581,6 +790,7 @@ function FigureCostPanel() {
   const [editing, setEditing] = useState(null);
   const [addingMfrId, setAddingMfrId] = useState(null);
   const [addForm, setAddForm] = useState({ scaleId: '', figureTypeId: '', cost: '', currency: '' });
+  const [quickAdd, setQuickAdd] = useState(null); // 'scale' | 'figureType' | 'currency'
   const toast = useToast();
 
   useEffect(() => {
@@ -664,6 +874,36 @@ function FigureCostPanel() {
     } catch (err) { toast(err.message, 'error'); }
   }
 
+  async function handleQuickAddScale(formData) {
+    try {
+      const created = await createLookup('SCALE', formData);
+      setScales(s => [...s, created]);
+      setAddForm(f => ({ ...f, scaleId: created.id }));
+      setQuickAdd(null);
+      toast('Scale added', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
+  async function handleQuickAddFigureType(formData) {
+    try {
+      const created = await createLookup('FIGURETYPE', formData);
+      setFigureTypes(f => [...f, created]);
+      setAddForm(f => ({ ...f, figureTypeId: created.id }));
+      setQuickAdd(null);
+      toast('Figure type added', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
+  async function handleQuickAddCurrency(formData) {
+    try {
+      const created = await upsertExchangeRate(formData);
+      setCurrencies(cs => [...cs, created].sort((a, b) => a.currencyCode.localeCompare(b.currencyCode)));
+      setAddForm(f => ({ ...f, currency: created.currencyCode }));
+      setQuickAdd(null);
+      toast('Currency added', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
   const cellStyle = { padding: '3px 6px', fontSize: 13 };
 
   return (
@@ -673,7 +913,7 @@ function FigureCostPanel() {
       </div>
       <div className="panel-body">
         <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
-          Add each scale and figure type that a manufacturer sells, with its purchase price. Currencies are restricted to those defined in Exchange Rates.
+          Add each scale and figure type that a manufacturer sells, with its purchase price. Currencies are restricted to those defined in Exchange Rates. For those figures that come in packs, work out the per figure price.
         </p>
         {loading ? (
           <div className="loading-center"><div className="spinner" /></div>
@@ -737,16 +977,22 @@ function FigureCostPanel() {
                       {isAdding && (
                         <tr>
                           <td>
-                            <select className="form-control" value={addForm.scaleId} onChange={e => setAddForm(f => ({ ...f, scaleId: e.target.value }))} style={cellStyle}>
-                              <option value="">Scale…</option>
-                              {scales.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                            </select>
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                              <select className="form-control" value={addForm.scaleId} onChange={e => setAddForm(f => ({ ...f, scaleId: e.target.value }))} style={cellStyle}>
+                                <option value="">Scale…</option>
+                                {scales.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                              </select>
+                              <button type="button" className="btn btn-icon btn-sm" title="Add new scale" onClick={() => setQuickAdd('scale')}>+</button>
+                            </div>
                           </td>
                           <td>
-                            <select className="form-control" value={addForm.figureTypeId} onChange={e => setAddForm(f => ({ ...f, figureTypeId: e.target.value }))} style={cellStyle}>
-                              <option value="">Figure Type…</option>
-                              {figureTypes.map(ft => <option key={ft.id} value={ft.id}>{ft.label}</option>)}
-                            </select>
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                              <select className="form-control" value={addForm.figureTypeId} onChange={e => setAddForm(f => ({ ...f, figureTypeId: e.target.value }))} style={cellStyle}>
+                                <option value="">Figure Type…</option>
+                                {figureTypes.map(ft => <option key={ft.id} value={ft.id}>{ft.label}</option>)}
+                              </select>
+                              <button type="button" className="btn btn-icon btn-sm" title="Add new figure type" onClick={() => setQuickAdd('figureType')}>+</button>
+                            </div>
                           </td>
                           <td>
                             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -763,6 +1009,7 @@ function FigureCostPanel() {
                               <select className="form-control" value={addForm.currency} onChange={e => setAddForm(f => ({ ...f, currency: e.target.value }))} style={{ width: 80, ...cellStyle }}>
                                 {currencies.map(r => <option key={r.currencyCode} value={r.currencyCode}>{r.currencyCode}</option>)}
                               </select>
+                              <button type="button" className="btn btn-icon btn-sm" title="Add new currency" onClick={() => setQuickAdd('currency')}>+</button>
                             </div>
                           </td>
                           <td>
@@ -799,6 +1046,16 @@ function FigureCostPanel() {
           })
         )}
       </div>
+
+      {quickAdd === 'scale' && (
+        <LookupModal singularLabel="Scale" showAbbreviation={false} onSave={handleQuickAddScale} onClose={() => setQuickAdd(null)} />
+      )}
+      {quickAdd === 'figureType' && (
+        <LookupModal singularLabel="Figure Type" onSave={handleQuickAddFigureType} onClose={() => setQuickAdd(null)} />
+      )}
+      {quickAdd === 'currency' && (
+        <ExchangeRateModal onSave={handleQuickAddCurrency} onClose={() => setQuickAdd(null)} />
+      )}
     </>
   );
 }

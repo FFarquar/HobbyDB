@@ -32,6 +32,11 @@ export const handler = async (event) => {
       if (method === 'GET') return await getManufacturerNotes();
       if (method === 'PUT') return await upsertManufacturerNote(event);
     }
+    if (path.includes('/costs/scalefiguretype')) {
+      if (method === 'GET') return await getScaleFigureTypes();
+      if (method === 'PUT') return await addScaleFigureType(event);
+      if (method === 'DELETE') return await removeScaleFigureType(event);
+    }
     return badRequest('Unknown cost endpoint');
   } catch (err) {
     return serverError(err);
@@ -223,4 +228,51 @@ async function upsertManufacturerNote(event) {
 
   await ddb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
   return ok(item);
+}
+
+// Scale ↔ Figure Type validity:  PK: SCALEFIGURETYPE#<scaleId>   SK: FIGURETYPE#<figureTypeId>
+async function getScaleFigureTypes() {
+  const result = await ddb.send(new ScanCommand({
+    TableName: TABLE_NAME,
+    FilterExpression: 'begins_with(PK, :prefix)',
+    ExpressionAttributeValues: { ':prefix': 'SCALEFIGURETYPE#' },
+  }));
+  return ok(result.Items || []);
+}
+
+async function addScaleFigureType(event) {
+  if (!requireAdmin(event)) return { statusCode: 403, headers: {}, body: JSON.stringify({ message: 'Admin only' }) };
+
+  const body = JSON.parse(event.body || '{}');
+  const { scaleId, figureTypeId } = body;
+  if (!scaleId || !figureTypeId) return badRequest('scaleId and figureTypeId are required');
+
+  const item = {
+    PK: `SCALEFIGURETYPE#${scaleId}`,
+    SK: `FIGURETYPE#${figureTypeId}`,
+    scaleId,
+    figureTypeId,
+    createdAt: now(),
+  };
+
+  await ddb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
+  return ok(item);
+}
+
+async function removeScaleFigureType(event) {
+  if (!requireAdmin(event)) return { statusCode: 403, headers: {}, body: JSON.stringify({ message: 'Admin only' }) };
+
+  const qs = event.queryStringParameters || {};
+  const { scaleId, figureTypeId } = qs;
+  if (!scaleId || !figureTypeId) return badRequest('scaleId and figureTypeId query params are required');
+
+  await ddb.send(new DeleteCommand({
+    TableName: TABLE_NAME,
+    Key: {
+      PK: `SCALEFIGURETYPE#${scaleId}`,
+      SK: `FIGURETYPE#${figureTypeId}`,
+    },
+    ConditionExpression: 'attribute_exists(PK)',
+  }));
+  return noContent();
 }

@@ -77,6 +77,10 @@ export const deleteFigureCost = (manufacturerId, scaleId, figureTypeId) =>
   api.delete(`/costs/figure?manufacturerId=${encodeURIComponent(manufacturerId)}&scaleId=${encodeURIComponent(scaleId)}&figureTypeId=${encodeURIComponent(figureTypeId)}`);
 export const getManufacturerNotes = () => api.get('/costs/mfrnotes');
 export const upsertManufacturerNote = (data) => api.put('/costs/mfrnotes', data);
+export const getScaleFigureTypes = () => api.get('/costs/scalefiguretype');
+export const addScaleFigureType = (data) => api.put('/costs/scalefiguretype', data);
+export const removeScaleFigureType = (scaleId, figureTypeId) =>
+  api.delete(`/costs/scalefiguretype?scaleId=${encodeURIComponent(scaleId)}&figureTypeId=${encodeURIComponent(figureTypeId)}`);
 
 // Reports
 export const getReport = (type) => api.get(`/reports/${type}`);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getLookups, createLookup } from '../../api/client.js';
+import { getLookups, createLookup, getScaleFigureTypes } from '../../api/client.js';
 import { PAINT_QUALITY_LABELS } from '../../config.js';
 
 // Maps each lookup type to the form fields it populates
@@ -17,6 +17,7 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
   const [category, setCategory] = useState(seed.category || collectionCategory || 'MINIATURE');
   const [form, setForm] = useState(seed);
   const [lookups, setLookups] = useState({});
+  const [scaleFigureTypes, setScaleFigureTypes] = useState([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -27,10 +28,14 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
     const types = category === 'MINIATURE'
       ? ['SCALE', 'MANUFACTURER', 'FIGURETYPE', 'NATIONALITY', 'BASESIZE', 'BASEMATERIAL', 'PAINTQUALITY']
       : ['SCALE'];
-    const results = await Promise.all(types.map(t => getLookups(t).catch(() => [])));
+    const [results, sft] = await Promise.all([
+      Promise.all(types.map(t => getLookups(t).catch(() => []))),
+      category === 'MINIATURE' ? getScaleFigureTypes().catch(() => []) : Promise.resolve([]),
+    ]);
     const map = {};
     types.forEach((t, i) => { map[t] = results[i]; });
     setLookups(map);
+    setScaleFigureTypes(sft);
   }
 
   function set(field, value) {
@@ -81,6 +86,7 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
 
             {category === 'MINIATURE' && (
               <MiniatureFields form={form} set={set} lookups={lookups}
+                scaleFigureTypes={scaleFigureTypes}
                 handleLookupChange={handleLookupChange} onQuickAdd={handleQuickAdd} />
             )}
             {category === 'BOARDGAME' && <BoardGameFields form={form} set={set} />}
@@ -119,7 +125,7 @@ function LookupSelect({ label, type, lookups, value, onChange, onQuickAdd }) {
           <option value="">— select —</option>
           {(lookups[type] || []).map(l => (
             <option key={l.id} value={l.id}>
-              {l.abbreviation ? `${l.abbreviation} — ${l.label}` : l.label}
+              {l.label}
             </option>
           ))}
         </select>
@@ -215,20 +221,51 @@ function QuickAddModal({ type, label, onSave, onClose }) {
 
 // ─── Category field groups ────────────────────────────────────────────────────
 
-function MiniatureFields({ form, set, lookups, handleLookupChange, onQuickAdd }) {
+function MiniatureFields({ form, set, lookups, scaleFigureTypes, handleLookupChange, onQuickAdd }) {
+  const allFigureTypes = lookups.FIGURETYPE || [];
+  const hasAnyLinks = scaleFigureTypes.length > 0;
+
+  const filteredFigureTypes = hasAnyLinks && form.scaleId
+    ? allFigureTypes.filter(ft => scaleFigureTypes.some(l => l.scaleId === form.scaleId && l.figureTypeId === ft.id))
+    : allFigureTypes;
+
+  function handleScaleChange(id) {
+    handleLookupChange('scaleId', 'scaleName', 'SCALE', id);
+    const scale = (lookups.SCALE || []).find(s => s.id === id);
+    const newMaxLevel = scale?.qualityNames?.length ?? scale?.paintLevels ?? Object.keys(PAINT_QUALITY_LABELS).length;
+    if (form.paintQualityId && parseInt(form.paintQualityId) > newMaxLevel) {
+      set('paintQualityId', null);
+      set('paintQualityName', '');
+    }
+    if (hasAnyLinks && id && form.figureTypeId) {
+      const stillValid = scaleFigureTypes.some(l => l.scaleId === id && l.figureTypeId === form.figureTypeId);
+      if (!stillValid) {
+        set('figureTypeId', null);
+        set('figureTypeName', '');
+      }
+    }
+  }
+
+  const figureTypeLookups = { ...lookups, FIGURETYPE: filteredFigureTypes };
+
+  const selectedScale = (lookups.SCALE || []).find(s => s.id === form.scaleId);
+  const scaleQualityNames = selectedScale?.qualityNames?.length
+    ? selectedScale.qualityNames
+    : Object.values(PAINT_QUALITY_LABELS).slice(0, selectedScale?.paintLevels ?? Object.keys(PAINT_QUALITY_LABELS).length);
+
   return (
     <>
       <hr className="divider" />
       <div className="form-row">
         <LookupSelect label="Scale" type="SCALE" lookups={lookups} onQuickAdd={onQuickAdd}
           value={form.scaleId}
-          onChange={id => handleLookupChange('scaleId', 'scaleName', 'SCALE', id)} />
+          onChange={handleScaleChange} />
         <LookupSelect label="Manufacturer" type="MANUFACTURER" lookups={lookups} onQuickAdd={onQuickAdd}
           value={form.manufacturerId}
           onChange={id => handleLookupChange('manufacturerId', 'manufacturerName', 'MANUFACTURER', id)} />
       </div>
       <div className="form-row">
-        <LookupSelect label="Figure Type" type="FIGURETYPE" lookups={lookups} onQuickAdd={onQuickAdd}
+        <LookupSelect label="Figure Type" type="FIGURETYPE" lookups={figureTypeLookups} onQuickAdd={onQuickAdd}
           value={form.figureTypeId}
           onChange={id => handleLookupChange('figureTypeId', 'figureTypeName', 'FIGURETYPE', id)} />
         <LookupSelect label="Nationality" type="NATIONALITY" lookups={lookups} onQuickAdd={onQuickAdd}
@@ -252,11 +289,14 @@ function MiniatureFields({ form, set, lookups, handleLookupChange, onQuickAdd })
           <label>Paint Quality</label>
           <select className="form-control" value={form.paintQualityId || ''}
             onChange={e => {
-              set('paintQualityId', e.target.value || null);
-              set('paintQualityName', PAINT_QUALITY_LABELS[e.target.value] || '');
+              const id = e.target.value;
+              set('paintQualityId', id || null);
+              set('paintQualityName', id ? (scaleQualityNames[parseInt(id) - 1] ?? '') : '');
             }}>
             <option value="">— select —</option>
-            {Object.entries(PAINT_QUALITY_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            {scaleQualityNames.map((name, i) => (
+              <option key={i + 1} value={String(i + 1)}>{name}</option>
+            ))}
           </select>
         </div>
       </div>

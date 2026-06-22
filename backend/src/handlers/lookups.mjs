@@ -46,7 +46,7 @@ async function createLookup(type, event) {
   if (!requireAdmin(event)) return { statusCode: 403, headers: {}, body: JSON.stringify({ message: 'Admin only' }) };
 
   const body = JSON.parse(event.body || '{}');
-  const { label, abbreviation } = body;
+  const { label, abbreviation, qualityNames } = body;
   if (!label) return badRequest('label is required');
 
   const id = newId();
@@ -61,6 +61,7 @@ async function createLookup(type, event) {
     active: true,
     createdAt: timestamp,
     updatedAt: timestamp,
+    ...(qualityNames !== undefined && { qualityNames }),
   };
 
   await ddb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
@@ -79,6 +80,7 @@ async function updateLookup(type, id, event) {
   if (body.label !== undefined) { updates.push('#label = :label'); exprNames['#label'] = 'label'; exprValues[':label'] = body.label; }
   if (body.abbreviation !== undefined) { updates.push('abbreviation = :abbreviation'); exprValues[':abbreviation'] = body.abbreviation; }
   if (body.active !== undefined) { updates.push('active = :active'); exprValues[':active'] = body.active; }
+  if (body.qualityNames !== undefined) { updates.push('qualityNames = :qualityNames'); exprValues[':qualityNames'] = body.qualityNames; }
 
   const result = await ddb.send(new UpdateCommand({
     TableName: TABLE_NAME,

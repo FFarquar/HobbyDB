@@ -403,6 +403,70 @@ Resources:
             Method: DELETE
             Auth:
               Authorizer: LambdaAuthorizer
+        GetFigureCosts:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/figure
+            Method: GET
+            Auth:
+              Authorizer: LambdaAuthorizer
+        PutFigureCost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/figure
+            Method: PUT
+            Auth:
+              Authorizer: LambdaAuthorizer
+        DeleteFigureCost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/figure
+            Method: DELETE
+            Auth:
+              Authorizer: LambdaAuthorizer
+        GetMfrNotes:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/mfrnotes
+            Method: GET
+            Auth:
+              Authorizer: LambdaAuthorizer
+        PutMfrNote:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/mfrnotes
+            Method: PUT
+            Auth:
+              Authorizer: LambdaAuthorizer
+        GetScaleFigureTypes:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/scalefiguretype
+            Method: GET
+            Auth:
+              Authorizer: LambdaAuthorizer
+        PutScaleFigureType:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/scalefiguretype
+            Method: PUT
+            Auth:
+              Authorizer: LambdaAuthorizer
+        DeleteScaleFigureType:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/scalefiguretype
+            Method: DELETE
+            Auth:
+              Authorizer: LambdaAuthorizer
 
   # ─── Lambda: Reports ──────────────────────────────────────────────────────────
   ReportsFunction:
