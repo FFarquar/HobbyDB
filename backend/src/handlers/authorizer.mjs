@@ -36,31 +36,27 @@ function verifyToken(token) {
   return payload;
 }
 
-function generatePolicy(principalId, role, effect, resource) {
-  return {
-    principalId,
-    policyDocument: {
-      Version: '2012-10-17',
-      Statement: [{ Action: 'execute-api:Invoke', Effect: effect, Resource: resource }],
-    },
-    context: { loginID: principalId, role },
-  };
-}
-
+// HTTP API v2 simple response format — context lands at
+// event.requestContext.authorizer.lambda.* in downstream handlers
 export const handler = async (event) => {
   try {
-    const raw = event.authorizationToken || '';
+    const raw = event.headers?.authorization || event.headers?.Authorization || '';
     const token = raw.startsWith('Bearer ') ? raw.slice(7) : raw;
     const payload = verifyToken(token);
 
     if (!payload) {
-      return generatePolicy('unknown', 'UNKNOWN', 'Deny', event.methodArn || '*');
+      return { isAuthorized: false };
     }
 
-    const arnBase = event.methodArn.split('/').slice(0, 2).join('/');
-    return generatePolicy(payload.loginID, payload.role || 'USER', 'Allow', `${arnBase}/*/*`);
+    return {
+      isAuthorized: true,
+      context: {
+        loginID: payload.loginID,
+        role: payload.role || 'USER',
+      },
+    };
   } catch (err) {
     console.error(err);
-    return generatePolicy('unknown', 'UNKNOWN', 'Deny', '*');
+    return { isAuthorized: false };
   }
 };
