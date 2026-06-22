@@ -1,5 +1,6 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { ENVIRONMENT } from './config.js';
+import { setUnauthorizedHandler } from './api/client.js';
 import LoginPage from './components/LoginPage.jsx';
 import MainLayout from './components/MainLayout.jsx';
 
@@ -34,6 +35,10 @@ export default function App() {
     localStorage.removeItem('userLoginID');
     setAuth(null);
   }
+
+  useEffect(() => {
+    setUnauthorizedHandler(handleLogout);
+  }, []);
 
   if (loading) return <div className="app-loading">Loading…</div>;
 

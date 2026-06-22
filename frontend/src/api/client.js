@@ -1,5 +1,8 @@
 import { API_BASE_URL, USE_MOCK } from '../config.js';
 
+let onUnauthorized = null;
+export function setUnauthorizedHandler(fn) { onUnauthorized = fn; }
+
 function getToken() {
   return localStorage.getItem('authToken') || '';
 }
@@ -21,6 +24,10 @@ async function request(method, path, body) {
   });
 
   if (res.status === 204) return null;
+  if (res.status === 401) {
+    onUnauthorized?.();
+    throw Object.assign(new Error('Session expired. Please log in again.'), { status: 401 });
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: res.statusText }));
     throw Object.assign(new Error(err.message || 'Request failed'), { status: res.status });
