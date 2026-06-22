@@ -84,6 +84,7 @@ Resources:
             FunctionArn: !GetAtt AuthorizerFunction.Arn
             AuthorizerPayloadFormatVersion: "2.0"
             EnableSimpleResponses: true
+            AuthorizerResultTtlInSeconds: 300
             Identity:
               Headers:
                 - Authorization

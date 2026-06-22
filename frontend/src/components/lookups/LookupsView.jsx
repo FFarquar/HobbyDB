@@ -827,8 +827,15 @@ function FigureCostPanel() {
   }
 
   function openAddForm(manufacturerId) {
+    const existing = getCostsForMfr(manufacturerId);
+    const last = existing[existing.length - 1];
     setAddingMfrId(manufacturerId);
-    setAddForm({ scaleId: '', figureTypeId: '', cost: '', currency: currencies[0]?.currencyCode || '' });
+    setAddForm({
+      scaleId: last?.scaleId || '',
+      figureTypeId: '',
+      cost: '',
+      currency: last?.currency || currencies[0]?.currencyCode || '',
+    });
     setEditing(null);
   }
 

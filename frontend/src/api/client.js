@@ -7,7 +7,7 @@ function getToken() {
   return localStorage.getItem('authToken') || '';
 }
 
-async function request(method, path, body) {
+async function request(method, path, body, attempt = 0) {
   if (USE_MOCK) {
     const { mockRequest } = await import('./mock.js');
     return mockRequest(method, path, body);
@@ -22,6 +22,11 @@ async function request(method, path, body) {
     headers,
     body: body != null ? JSON.stringify(body) : undefined,
   });
+
+  if (res.status === 503 && attempt < 3) {
+    await new Promise(r => setTimeout(r, 300 * 2 ** attempt));
+    return request(method, path, body, attempt + 1);
+  }
 
   if (res.status === 204) return null;
   if (res.status === 401) {

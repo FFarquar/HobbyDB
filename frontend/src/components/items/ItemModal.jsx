@@ -107,8 +107,8 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
     });
   }
 
-  async function handleSetFigureCost(costAUD) {
-    const entry = { manufacturerId: form.manufacturerId, scaleId: form.scaleId, figureTypeId: form.figureTypeId, cost: costAUD, currency: 'AUD' };
+  async function handleSetFigureCost(cost, currency) {
+    const entry = { manufacturerId: form.manufacturerId, scaleId: form.scaleId, figureTypeId: form.figureTypeId, cost, currency };
     await upsertFigureCost(entry);
     setFigureCosts(prev => {
       const idx = prev.findIndex(c => c.manufacturerId === entry.manufacturerId && c.scaleId === entry.scaleId && c.figureTypeId === entry.figureTypeId);
@@ -123,7 +123,10 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
     && !figureCosts.some(c => c.manufacturerId === form.manufacturerId && c.scaleId === form.scaleId && c.figureTypeId === form.figureTypeId);
   const missingPaintCost = category === 'MINIATURE' && !!form.scaleId && !!form.figureTypeId && !!form.paintQualityId
     && !paintCosts.some(c => c.scaleId === form.scaleId && c.figureTypeId === form.figureTypeId && c.qualityId === String(form.paintQualityId));
-  const canSave = !missingBasingCost && !missingFigureCost && !missingPaintCost;
+  const missingRequiredFields = category === 'MINIATURE' && (
+    !form.paintQualityId || !form.baseSizeId || !form.baseMaterialId
+  );
+  const canSave = !missingBasingCost && !missingFigureCost && !missingPaintCost && !missingRequiredFields;
 
   // Calculated item value
   const rateMap = { AUD: 1.0 };
@@ -181,6 +184,7 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
                 scaleFigureTypes={scaleFigureTypes}
                 paintCosts={paintCosts}
                 basingCosts={basingCosts}
+                exchangeRates={exchangeRates}
                 missingBasingCost={missingBasingCost}
                 missingFigureCost={missingFigureCost}
                 missingPaintCost={missingPaintCost}
@@ -239,6 +243,11 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+            {missingRequiredFields && (
+              <span style={{ fontSize: 12, color: 'var(--danger)', marginRight: 'auto', alignSelf: 'center' }}>
+                Paint Quality, Base Size and Base Material are required.
+              </span>
+            )}
             <button type="submit" className="btn btn-primary" disabled={saving || !canSave}>{saving ? 'Saving…' : 'Save'}</button>
           </div>
         </form>
@@ -249,16 +258,21 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
 
 // ─── Inline cost setter ───────────────────────────────────────────────────────
 
-function InlineCostSetter({ label, onSet }) {
+function InlineCostSetter({ label, onSet, currencies }) {
   const [value, setValue] = useState('');
+  const [currency, setCurrency] = useState('AUD');
   const [saving, setSaving] = useState(false);
 
   async function handleSet() {
     const cost = parseFloat(value);
     if (!cost || cost < 0 || saving) return;
     setSaving(true);
-    try { await onSet(cost); } finally { setSaving(false); }
+    try { await onSet(cost, currency); } finally { setSaving(false); }
   }
+
+  const currencyOptions = currencies
+    ? ['AUD', ...currencies.map(r => r.currencyCode).filter(c => c !== 'AUD')]
+    : null;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
@@ -274,6 +288,16 @@ function InlineCostSetter({ label, onSet }) {
         style={{ width: 90, padding: '4px 8px', fontSize: 13 }}
         className="form-control"
       />
+      {currencyOptions && (
+        <select
+          className="form-control"
+          value={currency}
+          onChange={e => setCurrency(e.target.value)}
+          style={{ width: 80, padding: '4px 6px', fontSize: 13 }}
+        >
+          {currencyOptions.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      )}
       <button
         type="button"
         className="btn btn-primary"
@@ -447,7 +471,7 @@ function QuickAddQualityModal({ levelNumber, onSave, onClose }) {
 
 // ─── Category field groups ────────────────────────────────────────────────────
 
-function MiniatureFields({ form, set, lookups, scaleFigureTypes, paintCosts, basingCosts, handleLookupChange, onQuickAdd, onUpdateScale, missingBasingCost, missingFigureCost, missingPaintCost, onSetBasingCost, onSetFigureCost, onSetPaintCost }) {
+function MiniatureFields({ form, set, lookups, scaleFigureTypes, paintCosts, basingCosts, exchangeRates, handleLookupChange, onQuickAdd, onUpdateScale, missingBasingCost, missingFigureCost, missingPaintCost, onSetBasingCost, onSetFigureCost, onSetPaintCost }) {
   const [showAddQuality, setShowAddQuality] = useState(false);
   const allFigureTypes = lookups.FIGURETYPE || [];
   const hasAnyLinks = scaleFigureTypes.length > 0;
@@ -511,7 +535,7 @@ function MiniatureFields({ form, set, lookups, scaleFigureTypes, paintCosts, bas
           <span style={{ fontSize: 12, color: 'var(--danger)' }}>
             No figure cost set for <strong>{form.manufacturerName}</strong> {form.scaleName} {form.figureTypeName} — save is blocked.
           </span>
-          <InlineCostSetter label="Cost per figure (AUD)" onSet={onSetFigureCost} />
+          <InlineCostSetter label="Cost per figure" onSet={onSetFigureCost} currencies={exchangeRates} />
         </div>
       )}
       <div className="form-row">
@@ -612,13 +636,17 @@ function MiniatureFields({ form, set, lookups, scaleFigureTypes, paintCosts, bas
         </div>
         <div className="form-group">
           <label>Currency</label>
-          <input
+          <select
             className="form-control"
-            value={form.purchasePriceCurrency || ''}
-            onChange={e => set('purchasePriceCurrency', e.target.value.toUpperCase().slice(0, 3))}
-            placeholder="AUD"
-            maxLength={3}
-          />
+            value={form.purchasePriceCurrency || 'AUD'}
+            onChange={e => set('purchasePriceCurrency', e.target.value)}
+          >
+            <option value="AUD">AUD</option>
+            {(exchangeRates || [])
+              .filter(r => r.currencyCode !== 'AUD')
+              .map(r => <option key={r.currencyCode} value={r.currencyCode}>{r.currencyCode}</option>)
+            }
+          </select>
         </div>
       </div>
     </>
