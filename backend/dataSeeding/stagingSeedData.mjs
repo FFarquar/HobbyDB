@@ -210,12 +210,12 @@ const paintCosts = [
 // ─── BASING COSTS ─────────────────────────────────────────────────────────────
 
 const basingCosts = [
-  { materialId: "mat-metal", sizeId: "base-40x20", costUSD: 0.25 },
-  { materialId: "mat-metal", sizeId: "base-40x30", costUSD: 0.35 },
-  { materialId: "mat-metal", sizeId: "base-60x30", costUSD: 0.40 },
-  { materialId: "mat-mdf",   sizeId: "base-40x20", costUSD: 0.10 },
-  { materialId: "mat-mdf",   sizeId: "base-40x30", costUSD: 0.12 },
-  { materialId: "mat-mdf",   sizeId: "base-60x30", costUSD: 0.15 },
+  { materialId: "mat-metal", sizeId: "base-40x20", costAUD: 0.25 },
+  { materialId: "mat-metal", sizeId: "base-40x30", costAUD: 0.35 },
+  { materialId: "mat-metal", sizeId: "base-60x30", costAUD: 0.40 },
+  { materialId: "mat-mdf",   sizeId: "base-40x20", costAUD: 0.10 },
+  { materialId: "mat-mdf",   sizeId: "base-40x30", costAUD: 0.12 },
+  { materialId: "mat-mdf",   sizeId: "base-60x30", costAUD: 0.15 },
 ].map(b => ({
   PK: `BASECOST#${b.materialId}`,
   SK: `SIZE#${b.sizeId}`,

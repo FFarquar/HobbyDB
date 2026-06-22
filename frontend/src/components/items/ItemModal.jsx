@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getLookups, createLookup, getScaleFigureTypes } from '../../api/client.js';
+import { getLookups, createLookup, updateLookup, getScaleFigureTypes, getPaintCosts, upsertPaintCost, getBasingCosts, upsertBasingCost, getFigureCosts, upsertFigureCost, getExchangeRates } from '../../api/client.js';
 import { PAINT_QUALITY_LABELS } from '../../config.js';
 
 // Maps each lookup type to the form fields it populates
@@ -18,6 +18,10 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
   const [form, setForm] = useState(seed);
   const [lookups, setLookups] = useState({});
   const [scaleFigureTypes, setScaleFigureTypes] = useState([]);
+  const [paintCosts, setPaintCosts] = useState([]);
+  const [basingCosts, setBasingCosts] = useState([]);
+  const [figureCosts, setFigureCosts] = useState([]);
+  const [exchangeRates, setExchangeRates] = useState([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -28,14 +32,22 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
     const types = category === 'MINIATURE'
       ? ['SCALE', 'MANUFACTURER', 'FIGURETYPE', 'NATIONALITY', 'BASESIZE', 'BASEMATERIAL', 'PAINTQUALITY']
       : ['SCALE'];
-    const [results, sft] = await Promise.all([
+    const [results, sft, costs, baseCosts, figCosts, rates] = await Promise.all([
       Promise.all(types.map(t => getLookups(t).catch(() => []))),
       category === 'MINIATURE' ? getScaleFigureTypes().catch(() => []) : Promise.resolve([]),
+      category === 'MINIATURE' ? getPaintCosts().catch(() => []) : Promise.resolve([]),
+      category === 'MINIATURE' ? getBasingCosts().catch(() => []) : Promise.resolve([]),
+      category === 'MINIATURE' ? getFigureCosts().catch(() => []) : Promise.resolve([]),
+      category === 'MINIATURE' ? getExchangeRates().catch(() => []) : Promise.resolve([]),
     ]);
     const map = {};
     types.forEach((t, i) => { map[t] = results[i]; });
     setLookups(map);
     setScaleFigureTypes(sft);
+    setPaintCosts(costs);
+    setBasingCosts(baseCosts);
+    setFigureCosts(figCosts);
+    setExchangeRates(rates);
   }
 
   function set(field, value) {
@@ -48,6 +60,13 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
     set(nameField, item?.label || '');
   }
 
+  function handleUpdateScale(scaleId, updates) {
+    setLookups(prev => ({
+      ...prev,
+      SCALE: (prev.SCALE || []).map(s => s.id === scaleId ? { ...s, ...updates } : s),
+    }));
+  }
+
   // Called when a new value is created via the QuickAdd mini-modal.
   // Appends it to the local lookup list, then auto-selects it in the form.
   function handleQuickAdd(type, newItem) {
@@ -58,11 +77,84 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
       ),
     }));
     const [field, nameField] = FIELD_MAP[type] || [];
-    if (field) setForm(f => ({ ...f, [field]: newItem.id, [nameField]: newItem.label }));
+    if (field) {
+      setForm(f => ({ ...f, [field]: newItem.id, [nameField]: newItem.label }));
+      // If figure types are scale-filtered and a scale is selected, add a synthetic link
+      // so the newly created type immediately appears in the filtered dropdown.
+      if (type === 'FIGURETYPE' && form.scaleId) {
+        setScaleFigureTypes(prev => [...prev, { scaleId: form.scaleId, figureTypeId: newItem.id }]);
+      }
+    }
   }
+
+  async function handleSetPaintCost(costUSD) {
+    const entry = { scaleId: form.scaleId, figureTypeId: form.figureTypeId, qualityId: String(form.paintQualityId), costUSD };
+    await upsertPaintCost(entry);
+    setPaintCosts(prev => {
+      const idx = prev.findIndex(c => c.scaleId === entry.scaleId && c.figureTypeId === entry.figureTypeId && c.qualityId === entry.qualityId);
+      if (idx === -1) return [...prev, entry];
+      const next = [...prev]; next[idx] = entry; return next;
+    });
+  }
+
+  async function handleSetBasingCost(costAUD) {
+    const entry = { materialId: form.baseMaterialId, sizeId: form.baseSizeId, costAUD };
+    await upsertBasingCost(entry);
+    setBasingCosts(prev => {
+      const idx = prev.findIndex(c => c.materialId === entry.materialId && c.sizeId === entry.sizeId);
+      if (idx === -1) return [...prev, entry];
+      const next = [...prev]; next[idx] = entry; return next;
+    });
+  }
+
+  async function handleSetFigureCost(costAUD) {
+    const entry = { manufacturerId: form.manufacturerId, scaleId: form.scaleId, figureTypeId: form.figureTypeId, cost: costAUD, currency: 'AUD' };
+    await upsertFigureCost(entry);
+    setFigureCosts(prev => {
+      const idx = prev.findIndex(c => c.manufacturerId === entry.manufacturerId && c.scaleId === entry.scaleId && c.figureTypeId === entry.figureTypeId);
+      if (idx === -1) return [...prev, entry];
+      const next = [...prev]; next[idx] = entry; return next;
+    });
+  }
+
+  const missingBasingCost = category === 'MINIATURE' && !!form.baseSizeId && !!form.baseMaterialId
+    && !basingCosts.some(c => c.materialId === form.baseMaterialId && c.sizeId === form.baseSizeId);
+  const missingFigureCost = category === 'MINIATURE' && !!form.manufacturerId && !!form.scaleId && !!form.figureTypeId
+    && !figureCosts.some(c => c.manufacturerId === form.manufacturerId && c.scaleId === form.scaleId && c.figureTypeId === form.figureTypeId);
+  const missingPaintCost = category === 'MINIATURE' && !!form.scaleId && !!form.figureTypeId && !!form.paintQualityId
+    && !paintCosts.some(c => c.scaleId === form.scaleId && c.figureTypeId === form.figureTypeId && c.qualityId === String(form.paintQualityId));
+  const canSave = !missingBasingCost && !missingFigureCost && !missingPaintCost;
+
+  // Calculated item value
+  const rateMap = { AUD: 1.0 };
+  for (const er of exchangeRates) rateMap[er.currencyCode] = er.rateToAUD;
+  const totalFigures = (form.quantity || 1) * (form.numberBases || 0);
+
+  const selectedFigureCost = category === 'MINIATURE'
+    ? figureCosts.find(c => c.manufacturerId === form.manufacturerId && c.scaleId === form.scaleId && c.figureTypeId === form.figureTypeId)
+    : null;
+  const figureValueAUD = selectedFigureCost
+    ? selectedFigureCost.cost * (rateMap[selectedFigureCost.currency] || 1) * totalFigures
+    : null;
+
+  const selectedPaintCost = category === 'MINIATURE'
+    ? paintCosts.find(c => c.scaleId === form.scaleId && c.figureTypeId === form.figureTypeId && c.qualityId === String(form.paintQualityId))
+    : null;
+  const paintValueAUD = selectedPaintCost
+    ? selectedPaintCost.costUSD * (rateMap['USD'] || 1) * totalFigures
+    : null;
+
+  const selectedBasingCost = category === 'MINIATURE'
+    ? basingCosts.find(c => c.materialId === form.baseMaterialId && c.sizeId === form.baseSizeId)
+    : null;
+  const basingValueAUD = selectedBasingCost ? selectedBasingCost.costAUD * (form.numberBases || 0) : null;
+
+  const calculatedValueAUD = (figureValueAUD !== null || paintValueAUD !== null || basingValueAUD !== null)
+    ? (figureValueAUD || 0) + (paintValueAUD || 0) + (basingValueAUD || 0) : null;
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!canSave) return;
     setSaving(true);
     await onSave({ ...form, category });
     setSaving(false);
@@ -87,7 +179,16 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
             {category === 'MINIATURE' && (
               <MiniatureFields form={form} set={set} lookups={lookups}
                 scaleFigureTypes={scaleFigureTypes}
-                handleLookupChange={handleLookupChange} onQuickAdd={handleQuickAdd} />
+                paintCosts={paintCosts}
+                basingCosts={basingCosts}
+                missingBasingCost={missingBasingCost}
+                missingFigureCost={missingFigureCost}
+                missingPaintCost={missingPaintCost}
+                onSetBasingCost={handleSetBasingCost}
+                onSetFigureCost={handleSetFigureCost}
+                onSetPaintCost={handleSetPaintCost}
+                handleLookupChange={handleLookupChange} onQuickAdd={handleQuickAdd}
+                onUpdateScale={handleUpdateScale} />
             )}
             {category === 'BOARDGAME' && <BoardGameFields form={form} set={set} />}
             {category === 'BOOK'      && <BookFields      form={form} set={set} />}
@@ -99,15 +200,89 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
 
             <div className="form-group">
               <label>Notes</label>
-              <textarea className="form-control" value={form.notes || ''} onChange={e => set('notes', e.target.value)} placeholder="Purchase price, condition, etc." />
+              <textarea className="form-control" value={form.notes || ''} onChange={e => set('notes', e.target.value)} placeholder="Condition, provenance, etc." />
             </div>
+
+            {calculatedValueAUD !== null && (
+              <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--bg2)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: 13 }}>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>Calculated Value</div>
+                {figureValueAUD !== null && (
+                  <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                    Figures: {totalFigures} figs
+                    {selectedFigureCost && ` × ${selectedFigureCost.currency} $${selectedFigureCost.cost}`}
+                    {selectedFigureCost && selectedFigureCost.currency !== 'AUD' && ` (× ${rateMap[selectedFigureCost.currency] || 1} rate)`}
+                    {' = '}
+                    <strong>AUD ${figureValueAUD.toFixed(2)}</strong>
+                  </div>
+                )}
+                {paintValueAUD !== null && (
+                  <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                    Painting: {totalFigures} figs
+                    {selectedPaintCost && ` × USD $${selectedPaintCost.costUSD}`}
+                    {` (× ${(rateMap['USD'] || 1).toFixed(4)} USD→AUD)`}
+                    {' = '}
+                    <strong>AUD ${paintValueAUD.toFixed(2)}</strong>
+                  </div>
+                )}
+                {basingValueAUD !== null && (
+                  <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                    Basing: {form.numberBases || 0} bases × AUD ${selectedBasingCost?.costAUD}
+                    {' = '}
+                    <strong>AUD ${basingValueAUD.toFixed(2)}</strong>
+                  </div>
+                )}
+                <div style={{ marginTop: 6, fontWeight: 600, fontSize: 14 }}>
+                  Total: AUD ${calculatedValueAUD.toFixed(2)}
+                </div>
+              </div>
+            )}
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+            <button type="submit" className="btn btn-primary" disabled={saving || !canSave}>{saving ? 'Saving…' : 'Save'}</button>
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+// ─── Inline cost setter ───────────────────────────────────────────────────────
+
+function InlineCostSetter({ label, onSet }) {
+  const [value, setValue] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function handleSet() {
+    const cost = parseFloat(value);
+    if (!cost || cost < 0 || saving) return;
+    setSaving(true);
+    try { await onSet(cost); } finally { setSaving(false); }
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{label}:</span>
+      <input
+        type="number"
+        min="0"
+        step="0.01"
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSet(); } }}
+        placeholder="0.00"
+        style={{ width: 90, padding: '4px 8px', fontSize: 13 }}
+        className="form-control"
+      />
+      <button
+        type="button"
+        className="btn btn-primary"
+        style={{ padding: '4px 12px', fontSize: 13 }}
+        disabled={!value || saving}
+        onClick={handleSet}
+      >
+        {saving ? '…' : 'Set'}
+      </button>
     </div>
   );
 }
@@ -219,15 +394,69 @@ function QuickAddModal({ type, label, onSave, onClose }) {
   );
 }
 
+// ─── Quick-add paint quality level ───────────────────────────────────────────
+
+function QuickAddQualityModal({ levelNumber, onSave, onClose }) {
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit() {
+    if (!name || saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      await onSave(name);
+    } catch (err) {
+      setError(err.message || 'Failed to save');
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="modal-overlay" style={{ zIndex: 1100 }} onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal" style={{ maxWidth: 360 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <span className="modal-title">Add Paint Quality Level {levelNumber}</span>
+          <button type="button" className="btn btn-icon" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          {error && <p style={{ color: 'var(--danger)', margin: '0 0 8px', fontSize: 13 }}>{error}</p>}
+          <div className="form-group">
+            <label>Level Name *</label>
+            <input
+              className="form-control"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSubmit(); } }}
+              placeholder={`e.g. Level ${levelNumber} — Competition`}
+              autoFocus
+            />
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn btn-primary" disabled={saving || !name} onClick={handleSubmit}>
+            {saving ? 'Saving…' : 'Add'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Category field groups ────────────────────────────────────────────────────
 
-function MiniatureFields({ form, set, lookups, scaleFigureTypes, handleLookupChange, onQuickAdd }) {
+function MiniatureFields({ form, set, lookups, scaleFigureTypes, paintCosts, basingCosts, handleLookupChange, onQuickAdd, onUpdateScale, missingBasingCost, missingFigureCost, missingPaintCost, onSetBasingCost, onSetFigureCost, onSetPaintCost }) {
+  const [showAddQuality, setShowAddQuality] = useState(false);
   const allFigureTypes = lookups.FIGURETYPE || [];
   const hasAnyLinks = scaleFigureTypes.length > 0;
 
-  const filteredFigureTypes = hasAnyLinks && form.scaleId
+  const linkedForScale = hasAnyLinks && form.scaleId
     ? allFigureTypes.filter(ft => scaleFigureTypes.some(l => l.scaleId === form.scaleId && l.figureTypeId === ft.id))
-    : allFigureTypes;
+    : null;
+  // Fall back to showing all types if the selected scale has no configured links yet
+  const filteredFigureTypes = linkedForScale?.length ? linkedForScale : allFigureTypes;
 
   function handleScaleChange(id) {
     handleLookupChange('scaleId', 'scaleName', 'SCALE', id);
@@ -253,6 +482,11 @@ function MiniatureFields({ form, set, lookups, scaleFigureTypes, handleLookupCha
     ? selectedScale.qualityNames
     : Object.values(PAINT_QUALITY_LABELS).slice(0, selectedScale?.paintLevels ?? Object.keys(PAINT_QUALITY_LABELS).length);
 
+  const missingRates = form.scaleId && form.figureTypeId && scaleQualityNames.length > 0
+    && scaleQualityNames.some((_, i) =>
+      !paintCosts.some(c => c.scaleId === form.scaleId && c.figureTypeId === form.figureTypeId && c.qualityId === String(i + 1))
+    );
+
   return (
     <>
       <hr className="divider" />
@@ -272,6 +506,14 @@ function MiniatureFields({ form, set, lookups, scaleFigureTypes, handleLookupCha
           value={form.nationalityId}
           onChange={id => handleLookupChange('nationalityId', 'nationalityName', 'NATIONALITY', id)} />
       </div>
+      {missingFigureCost && (
+        <div style={{ marginBottom: 12 }}>
+          <span style={{ fontSize: 12, color: 'var(--danger)' }}>
+            No figure cost set for <strong>{form.manufacturerName}</strong> {form.scaleName} {form.figureTypeName} — save is blocked.
+          </span>
+          <InlineCostSetter label="Cost per figure (AUD)" onSet={onSetFigureCost} />
+        </div>
+      )}
       <div className="form-row">
         <div className="form-group">
           <label>Figures per Base</label>
@@ -287,19 +529,54 @@ function MiniatureFields({ form, set, lookups, scaleFigureTypes, handleLookupCha
       <div className="form-row">
         <div className="form-group">
           <label>Paint Quality</label>
-          <select className="form-control" value={form.paintQualityId || ''}
-            onChange={e => {
-              const id = e.target.value;
-              set('paintQualityId', id || null);
-              set('paintQualityName', id ? (scaleQualityNames[parseInt(id) - 1] ?? '') : '');
-            }}>
-            <option value="">— select —</option>
-            {scaleQualityNames.map((name, i) => (
-              <option key={i + 1} value={String(i + 1)}>{name}</option>
-            ))}
-          </select>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <select className="form-control" value={form.paintQualityId || ''}
+              onChange={e => {
+                const id = e.target.value;
+                set('paintQualityId', id || null);
+                set('paintQualityName', id ? (scaleQualityNames[parseInt(id) - 1] ?? '') : '');
+              }}>
+              <option value="">— select —</option>
+              {scaleQualityNames.map((name, i) => (
+                <option key={i + 1} value={String(i + 1)}>{name}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn btn-icon"
+              title={form.scaleId ? 'Add paint quality level' : 'Select a scale first'}
+              disabled={!form.scaleId}
+              style={{ flexShrink: 0, fontSize: 18, lineHeight: 1 }}
+              onClick={() => setShowAddQuality(true)}
+            >
+              +
+            </button>
+          </div>
+          {showAddQuality && (
+            <QuickAddQualityModal
+              levelNumber={scaleQualityNames.length + 1}
+              onSave={async (name) => {
+                const newNames = [...scaleQualityNames, name];
+                await updateLookup('SCALE', form.scaleId, { qualityNames: newNames });
+                onUpdateScale(form.scaleId, { qualityNames: newNames });
+                const newId = String(newNames.length);
+                set('paintQualityId', newId);
+                set('paintQualityName', name);
+                setShowAddQuality(false);
+              }}
+              onClose={() => setShowAddQuality(false)}
+            />
+          )}
         </div>
       </div>
+      {missingPaintCost && (
+        <div style={{ marginBottom: 12 }}>
+          <span style={{ fontSize: 12, color: 'var(--danger)' }}>
+            No painting rate set for {form.scaleName} {form.figureTypeName} at this quality level — save is blocked.
+          </span>
+          <InlineCostSetter label="Painting rate per figure (USD)" onSet={onSetPaintCost} />
+        </div>
+      )}
       <div className="form-row">
         <LookupSelect label="Base Size" type="BASESIZE" lookups={lookups} onQuickAdd={onQuickAdd}
           value={form.baseSizeId}
@@ -307,6 +584,42 @@ function MiniatureFields({ form, set, lookups, scaleFigureTypes, handleLookupCha
         <LookupSelect label="Base Material" type="BASEMATERIAL" lookups={lookups} onQuickAdd={onQuickAdd}
           value={form.baseMaterialId}
           onChange={id => handleLookupChange('baseMaterialId', 'baseMaterialName', 'BASEMATERIAL', id)} />
+      </div>
+      {missingBasingCost && (
+        <div style={{ marginBottom: 12 }}>
+          <span style={{ fontSize: 12, color: 'var(--danger)' }}>
+            No basing cost set for <strong>{form.baseSizeName}</strong> / <strong>{form.baseMaterialName}</strong>.
+          </span>
+          <InlineCostSetter label="Cost per base (AUD)" onSet={onSetBasingCost} />
+        </div>
+      )}
+      <hr className="divider" />
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px' }}>
+        Only use these values to indicate for historical purpose what you paid for them.
+      </p>
+      <div className="form-row">
+        <div className="form-group">
+          <label>Purchase Price</label>
+          <input
+            className="form-control"
+            type="number"
+            min="0"
+            step="0.01"
+            value={form.purchasePriceAmt ?? ''}
+            onChange={e => set('purchasePriceAmt', e.target.value !== '' ? parseFloat(e.target.value) : null)}
+            placeholder="0.00"
+          />
+        </div>
+        <div className="form-group">
+          <label>Currency</label>
+          <input
+            className="form-control"
+            value={form.purchasePriceCurrency || ''}
+            onChange={e => set('purchasePriceCurrency', e.target.value.toUpperCase().slice(0, 3))}
+            placeholder="AUD"
+            maxLength={3}
+          />
+        </div>
       </div>
     </>
   );

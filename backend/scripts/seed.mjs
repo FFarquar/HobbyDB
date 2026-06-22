@@ -273,19 +273,19 @@ async function seedBasingRates() {
   console.log('\n🪨 Seeding basing rates...');
 
   const rates = [
-    { materialId: 'mat-metal',   sizeId: 'base-40x15', costUSD: 0.20 },
-    { materialId: 'mat-metal',   sizeId: 'base-40x20', costUSD: 0.25 },
-    { materialId: 'mat-metal',   sizeId: 'base-40x30', costUSD: 0.35 },
-    { materialId: 'mat-metal',   sizeId: 'base-60x30', costUSD: 0.40 },
-    { materialId: 'mat-metal',   sizeId: 'base-60x60', costUSD: 0.60 },
-    { materialId: 'mat-mdf',     sizeId: 'base-40x15', costUSD: 0.08 },
-    { materialId: 'mat-mdf',     sizeId: 'base-40x20', costUSD: 0.10 },
-    { materialId: 'mat-mdf',     sizeId: 'base-40x30', costUSD: 0.12 },
-    { materialId: 'mat-mdf',     sizeId: 'base-60x30', costUSD: 0.15 },
-    { materialId: 'mat-mdf',     sizeId: 'base-60x60', costUSD: 0.20 },
-    { materialId: 'mat-plastic', sizeId: 'base-40x20', costUSD: 0.05 },
-    { materialId: 'mat-plastic', sizeId: 'base-40x30', costUSD: 0.07 },
-    { materialId: 'mat-plastic', sizeId: 'base-60x30', costUSD: 0.10 },
+    { materialId: 'mat-metal',   sizeId: 'base-40x15', costAUD: 0.20 },
+    { materialId: 'mat-metal',   sizeId: 'base-40x20', costAUD: 0.25 },
+    { materialId: 'mat-metal',   sizeId: 'base-40x30', costAUD: 0.35 },
+    { materialId: 'mat-metal',   sizeId: 'base-60x30', costAUD: 0.40 },
+    { materialId: 'mat-metal',   sizeId: 'base-60x60', costAUD: 0.60 },
+    { materialId: 'mat-mdf',     sizeId: 'base-40x15', costAUD: 0.08 },
+    { materialId: 'mat-mdf',     sizeId: 'base-40x20', costAUD: 0.10 },
+    { materialId: 'mat-mdf',     sizeId: 'base-40x30', costAUD: 0.12 },
+    { materialId: 'mat-mdf',     sizeId: 'base-60x30', costAUD: 0.15 },
+    { materialId: 'mat-mdf',     sizeId: 'base-60x60', costAUD: 0.20 },
+    { materialId: 'mat-plastic', sizeId: 'base-40x20', costAUD: 0.05 },
+    { materialId: 'mat-plastic', sizeId: 'base-40x30', costAUD: 0.07 },
+    { materialId: 'mat-plastic', sizeId: 'base-60x30', costAUD: 0.10 },
   ];
 
   const items = rates.map(r => ({

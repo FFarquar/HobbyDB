@@ -9,6 +9,12 @@ const appName = isStaging ? 'HobbyDB Staging' : 'HobbyDB';
 export default defineConfig({
   plugins: [
     react(),
+    {
+      name: 'html-staging-title',
+      transformIndexHtml(html) {
+        return html.replace('<title>HobbyDB</title>', `<title>${appName}</title>`);
+      },
+    },
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],

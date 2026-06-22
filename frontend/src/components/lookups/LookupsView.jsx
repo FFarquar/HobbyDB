@@ -34,7 +34,7 @@ const SIDEBAR = [
     items: [
       { key: '__FIGURECOST', label: 'Figure Prices',   hint: 'Purchase price per figure — Manufacturer × Scale × Figure Type (with currency)' },
       { key: '__PAINTING',  label: 'Painting Rates',  hint: 'Commercial painting cost per figure (USD) — Scale × Figure Type × Quality' },
-      { key: '__BASING',    label: 'Basing Rates',    hint: 'Cost per base (USD) — Base Material × Base Size' },
+      { key: '__BASING',    label: 'Basing Rates',    hint: 'Cost per base (AUD) — Base Material × Base Size' },
       { key: '__EXCHANGE',  label: 'Exchange Rates',  hint: 'Conversion rates to AUD for purchase price display' },
     ],
   },
@@ -534,12 +534,12 @@ function BasingRatesPanel() {
   }, []);
 
   function getCost(materialId, sizeId) {
-    return costs.find(c => c.materialId === materialId && c.sizeId === sizeId)?.costUSD ?? '';
+    return costs.find(c => c.materialId === materialId && c.sizeId === sizeId)?.costAUD ?? '';
   }
 
   async function handleSave(materialId, sizeId, val) {
     try {
-      const updated = await upsertBasingCost({ materialId, sizeId, costUSD: parseFloat(val) });
+      const updated = await upsertBasingCost({ materialId, sizeId, costAUD: parseFloat(val) });
       setCosts(cs => {
         const idx = cs.findIndex(c => c.materialId === materialId && c.sizeId === sizeId);
         return idx === -1 ? [...cs, updated] : cs.map((c, i) => i === idx ? updated : c);
@@ -556,7 +556,7 @@ function BasingRatesPanel() {
       </div>
       <div className="panel-body">
         <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
-          Cost per base in USD. Click any cell to edit. Matrix: Base Material × Base Size.
+          Cost per base in AUD. Click any cell to edit. Matrix: Base Material × Base Size.
         </p>
         {loading ? (
           <div className="loading-center"><div className="spinner" /></div>

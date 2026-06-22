@@ -55,6 +55,7 @@ html, body { height: 100%; font-family: var(--font); background: var(--bg); colo
   transition: border-color 0.2s;
 }
 .form-control:focus { outline: none; border-color: var(--accent); }
+.form-control.input-error { border-color: var(--danger); }
 .form-control::placeholder { color: var(--text-muted); }
 select.form-control option { background: var(--input-bg); }
 textarea.form-control { resize: vertical; min-height: 80px; }

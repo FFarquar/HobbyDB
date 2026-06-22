@@ -130,12 +130,12 @@ function BasingCostsTab() {
   }, []);
 
   function getCost(materialId, sizeId) {
-    return costs.find(c => c.materialId === materialId && c.sizeId === sizeId)?.costUSD ?? '';
+    return costs.find(c => c.materialId === materialId && c.sizeId === sizeId)?.costAUD ?? '';
   }
 
-  async function handleSave(materialId, sizeId, costUSD) {
+  async function handleSave(materialId, sizeId, costAUD) {
     try {
-      const updated = await upsertBasingCost({ materialId, sizeId, costUSD: parseFloat(costUSD) });
+      const updated = await upsertBasingCost({ materialId, sizeId, costAUD: parseFloat(costAUD) });
       setCosts(cs => {
         const idx = cs.findIndex(c => c.materialId === materialId && c.sizeId === sizeId);
         return idx === -1 ? [...cs, updated] : cs.map((c, i) => i === idx ? updated : c);
@@ -153,7 +153,7 @@ function BasingCostsTab() {
   return (
     <div className="panel-body">
       <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>
-        Basing cost in USD per base. Matrix: Base Material × Base Size.
+        Basing cost in AUD per base. Matrix: Base Material × Base Size.
       </p>
       <div className="card">
         <div style={{ overflowX: 'auto' }}>

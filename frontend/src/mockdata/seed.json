@@ -139,12 +139,17 @@
     { "scaleId": "scale-15mm", "figureTypeId": "ft-cavalry",  "qualityId": "4", "costUSD": 12.0 }
   ],
   "basingCosts": [
-    { "materialId": "mat-metal",   "sizeId": "base-40x20",  "costUSD": 0.25 },
-    { "materialId": "mat-metal",   "sizeId": "base-40x30",  "costUSD": 0.35 },
-    { "materialId": "mat-metal",   "sizeId": "base-60x30",  "costUSD": 0.40 },
-    { "materialId": "mat-mdf",     "sizeId": "base-40x20",  "costUSD": 0.10 },
-    { "materialId": "mat-mdf",     "sizeId": "base-40x30",  "costUSD": 0.12 },
-    { "materialId": "mat-mdf",     "sizeId": "base-60x30",  "costUSD": 0.15 }
+    { "materialId": "mat-metal",   "sizeId": "base-40x20",  "costAUD": 0.25 },
+    { "materialId": "mat-metal",   "sizeId": "base-40x30",  "costAUD": 0.35 },
+    { "materialId": "mat-metal",   "sizeId": "base-60x30",  "costAUD": 0.40 },
+    { "materialId": "mat-mdf",     "sizeId": "base-40x20",  "costAUD": 0.10 },
+    { "materialId": "mat-mdf",     "sizeId": "base-40x30",  "costAUD": 0.12 },
+    { "materialId": "mat-mdf",     "sizeId": "base-60x30",  "costAUD": 0.15 }
+  ],
+  "figureCosts": [
+    { "manufacturerId": "mfr-baccus", "scaleId": "scale-6mm",  "figureTypeId": "ft-infantry", "cost": 0.06, "currency": "AUD" },
+    { "manufacturerId": "mfr-ab",     "scaleId": "scale-15mm", "figureTypeId": "ft-infantry", "cost": 0.33, "currency": "AUD" },
+    { "manufacturerId": "mfr-essex",  "scaleId": "scale-15mm", "figureTypeId": "ft-cavalry",  "cost": 0.95, "currency": "AUD" }
   ],
   "exchangeRates": [
     { "currencyCode": "USD", "name": "US Dollar",        "rateToAUD": 1.55, "updatedAt": "2026-06-21T00:00:00Z" },

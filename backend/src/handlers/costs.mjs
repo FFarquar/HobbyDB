@@ -183,9 +183,9 @@ async function upsertBasingCost(event) {
   if (!requireAdmin(event)) return { statusCode: 403, headers: {}, body: JSON.stringify({ message: 'Admin only' }) };
 
   const body = JSON.parse(event.body || '{}');
-  const { materialId, sizeId, costUSD } = body;
-  if (!materialId || !sizeId || costUSD == null) {
-    return badRequest('materialId, sizeId, and costUSD are required');
+  const { materialId, sizeId, costAUD } = body;
+  if (!materialId || !sizeId || costAUD == null) {
+    return badRequest('materialId, sizeId, and costAUD are required');
   }
 
   const item = {
@@ -193,7 +193,7 @@ async function upsertBasingCost(event) {
     SK: `SIZE#${sizeId}`,
     materialId,
     sizeId,
-    costUSD: Number(costUSD),
+    costAUD: Number(costAUD),
     updatedAt: now(),
   };
 

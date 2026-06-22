@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, createContext, useContext } from 'react';
 import { useAuth } from '../App.jsx';
 import { ToastProvider } from './Toast.jsx';
 import CollectionsView from './collections/CollectionsView.jsx';
@@ -6,6 +6,9 @@ import ReportsView from './reports/ReportsView.jsx';
 import LookupsView from './lookups/LookupsView.jsx';
 import UsersView from './users/UsersView.jsx';
 import { ROLES } from '../config.js';
+
+export const NavigationContext = createContext(null);
+export function useNavigate() { return useContext(NavigationContext); }
 
 const NAV = [
   { key: 'collections', label: '📦 Collections' },
@@ -18,6 +21,15 @@ export default function MainLayout() {
   const { auth, handleLogout } = useAuth();
   const [activeView, setActiveView] = useState('collections');
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    window.history.pushState({ hobbydb: true }, '');
+    function handlePopState() {
+      window.history.pushState({ hobbydb: true }, '');
+    }
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
   const isAdmin = auth?.role === ROLES.ADMIN;
 
   const navItems = NAV.filter(n => !n.adminOnly || isAdmin);
@@ -28,6 +40,7 @@ export default function MainLayout() {
   }
 
   return (
+    <NavigationContext.Provider value={{ navigate }}>
     <ToastProvider>
       <div className="app-layout">
         {/* Sidebar */}
@@ -71,5 +84,6 @@ export default function MainLayout() {
         )}
       </div>
     </ToastProvider>
+    </NavigationContext.Provider>
   );
 }

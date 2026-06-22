@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getGroups, createGroup, updateGroup, deleteGroup } from '../../api/client.js';
+import { getGroups, createGroup, updateGroup, deleteGroup, uploadImage } from '../../api/client.js';
 import { useToast } from '../Toast.jsx';
 import { useAuth } from '../../App.jsx';
 import ConfirmDialog from '../ConfirmDialog.jsx';
@@ -31,7 +31,7 @@ export default function GroupsView({ collection, onBack }) {
     }
   }
 
-  async function handleSave(formData) {
+  async function handleSave(formData, pendingFiles = []) {
     try {
       if (editTarget) {
         const updated = await updateGroup(collection.id, editTarget.id, formData);
@@ -40,6 +40,9 @@ export default function GroupsView({ collection, onBack }) {
         toast('Updated', 'success');
       } else {
         const created = await createGroup(collection.id, formData);
+        for (const { file } of pendingFiles) {
+          await uploadImage(file, created.id);
+        }
         setGroups(gs => [...gs, created]);
         toast('Created', 'success');
       }
@@ -141,24 +144,49 @@ export default function GroupsView({ collection, onBack }) {
   );
 }
 
+const deleteBtnStyle = {
+  position: 'absolute', top: 3, right: 3,
+  background: 'rgba(0,0,0,0.65)', color: '#fff',
+  border: 'none', borderRadius: '50%',
+  width: 20, height: 20, padding: 0,
+  cursor: 'pointer', fontSize: 10,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+};
+
 function GroupModal({ initial, groupLabel, onSave, onClose }) {
   const [name, setName] = useState(initial?.name || '');
   const [description, setDescription] = useState(initial?.description || '');
   const [notes, setNotes] = useState(initial?.notes || '');
   const [saving, setSaving] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState([]);
   const galleryRef = useRef(null);
+  const fileRef = useRef(null);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setSaving(true);
     try {
       if (galleryRef.current) await galleryRef.current.flush();
-      await onSave({ name, description, notes });
+      await onSave({ name, description, notes }, pendingFiles);
     } catch {
       // flush errors are toasted by ImageGallery; save errors by parent
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleFiles(e) {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    setPendingFiles(prev => [...prev, ...files.map(file => ({ file, previewUrl: URL.createObjectURL(file) }))]);
+    e.target.value = '';
+  }
+
+  function removePending(index) {
+    setPendingFiles(prev => {
+      URL.revokeObjectURL(prev[index].previewUrl);
+      return prev.filter((_, i) => i !== index);
+    });
   }
 
   return (
@@ -182,9 +210,31 @@ function GroupModal({ initial, groupLabel, onSave, onClose }) {
               <label>Notes</label>
               <textarea className="form-control" value={notes} onChange={e => setNotes(e.target.value)} />
             </div>
-            {initial && (
+            {initial ? (
               <div className="form-group">
                 <ImageGallery ref={galleryRef} entityId={initial.id} />
+              </div>
+            ) : (
+              <div className="form-group">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <label style={{ fontWeight: 500, margin: 0 }}>Photos</label>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => fileRef.current?.click()}>
+                    + Add Photo
+                  </button>
+                  <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleFiles} />
+                </div>
+                {pendingFiles.length === 0 ? (
+                  <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>No photos yet.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {pendingFiles.map((p, i) => (
+                      <div key={i} style={{ position: 'relative', width: 88, height: 88, flexShrink: 0 }}>
+                        <img src={p.previewUrl} alt={p.file.name} style={{ width: 88, height: 88, objectFit: 'cover', borderRadius: 6, display: 'block' }} />
+                        <button type="button" onClick={() => removePending(i)} style={deleteBtnStyle} title="Remove">✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -230,7 +230,136 @@ export async function mockRequest(method, path, body) {
   // ─── REPORTS ──────────────────────────────────────────────────────────────
   const reportMatch = path.match(/^\/reports\/(.+)$/);
   if (reportMatch) {
-    return { reportType: reportMatch[1], note: 'Mock report — seed more data to see results', rows: [] };
+    const reportType = reportMatch[1];
+
+    if (reportType === 'figures-by-scale' || reportType === 'figures-by-period') {
+      const miniatures = store.items.filter(i => i.category === 'MINIATURE');
+      const groupKey = reportType === 'figures-by-scale' ? 'scaleName' : 'periodName';
+      const rowKey = reportType === 'figures-by-scale' ? 'scale' : 'period';
+      const grouped = {};
+      for (const item of miniatures) {
+        const key = item[groupKey] || item[groupKey.replace('Name', 'Id')] || 'Unknown';
+        const totalFigs = (item.numberBases || 0) * (item.quantity || 1);
+        grouped[key] = (grouped[key] || 0) + totalFigs;
+      }
+      const rows = Object.entries(grouped)
+        .map(([k, count]) => ({ [rowKey]: k, count }))
+        .sort((a, b) => b.count - a.count);
+      const totalFigures = miniatures.reduce((s, i) => s + (i.numberBases || 0) * (i.quantity || 1), 0);
+      return { reportType, rows, totalFigures };
+    }
+
+    if (reportType === 'inventory-summary') {
+      const summary = {};
+      let totalItems = 0, totalQuantity = 0;
+      for (const item of store.items) {
+        const cat = item.category || 'OTHER';
+        if (!summary[cat]) summary[cat] = { category: cat, itemCount: 0, totalQuantity: 0 };
+        summary[cat].itemCount++;
+        const qty = cat === 'MINIATURE'
+          ? (item.numberBases || 0) * (item.quantity || 1)
+          : (item.quantity || 1);
+        summary[cat].totalQuantity += qty;
+        totalItems++;
+        totalQuantity += qty;
+      }
+      return { reportType, categories: Object.values(summary), totalItems, totalQuantity };
+    }
+
+    if (reportType === 'value-by-army') {
+      const rateMap = { AUD: 1.0 };
+      for (const er of (store.exchangeRates || [])) rateMap[er.currencyCode] = er.rateToAUD;
+      const figureMap = {};
+      for (const fc of (store.figureCosts || [])) {
+        figureMap[`${fc.manufacturerId}|${fc.scaleId}|${fc.figureTypeId}`] = fc;
+      }
+      const paintMap = {};
+      for (const pc of (store.paintCosts || [])) {
+        paintMap[`${pc.scaleId}|${pc.figureTypeId}|${pc.qualityId}`] = pc;
+      }
+      const basingMap = {};
+      for (const bc of (store.basingCosts || [])) {
+        basingMap[`${bc.materialId}|${bc.sizeId}`] = bc.costAUD;
+      }
+      const collectionMap = {};
+      for (const c of (store.collections || [])) collectionMap[c.id] = c;
+
+      const armies = [];
+      for (const group of (store.groups || [])) {
+        const collection = collectionMap[group.collectionId];
+        if (!collection || collection.category !== 'MINIATURE') continue;
+        const miniatures = store.items.filter(i => i.groupId === group.id && i.category === 'MINIATURE');
+        let totalFigureCostAUD = 0, totalPaintCostAUD = 0, totalBasingCostAUD = 0;
+        const items = miniatures.map(item => {
+          const qty = item.quantity || 1;
+          const nb = item.numberBases || 0;
+          const totalFigs = qty * nb;
+          const fc = figureMap[`${item.manufacturerId}|${item.scaleId}|${item.figureTypeId}`];
+          const figureCostAUD = fc ? fc.cost * (rateMap[fc.currency] || 1) * totalFigs : 0;
+          const pc = paintMap[`${item.scaleId}|${item.figureTypeId}|${item.paintQualityId}`];
+          const paintCostAUD = pc ? pc.costUSD * (rateMap['USD'] || 1) * totalFigs : 0;
+          const basingCostAUD = (item.baseMaterialId && item.baseSizeId)
+            ? (basingMap[`${item.baseMaterialId}|${item.baseSizeId}`] || 0) * nb : 0;
+          totalFigureCostAUD += figureCostAUD;
+          totalPaintCostAUD += paintCostAUD;
+          totalBasingCostAUD += basingCostAUD;
+          return {
+            name: item.name, quantity: qty, numberBases: nb,
+            scaleName: item.scaleName || '', figureTypeName: item.figureTypeName || '',
+            manufacturerName: item.manufacturerName || '',
+            figureCostAUD, paintCostAUD, basingCostAUD,
+            totalAUD: figureCostAUD + paintCostAUD + basingCostAUD,
+          };
+        });
+        armies.push({
+          groupId: group.id, groupName: group.name, collectionName: collection.name,
+          totalFigureCostAUD, totalPaintCostAUD, totalBasingCostAUD,
+          totalAUD: totalFigureCostAUD + totalPaintCostAUD + totalBasingCostAUD,
+          items,
+        });
+      }
+      armies.sort((a, b) => b.totalAUD - a.totalAUD);
+      return { reportType, armies };
+    }
+
+    if (reportType === 'collection-value') {
+      const rateMap = { AUD: 1.0 };
+      for (const er of (store.exchangeRates || [])) rateMap[er.currencyCode] = er.rateToAUD;
+      const figureMap = {};
+      for (const fc of (store.figureCosts || [])) {
+        figureMap[`${fc.manufacturerId}|${fc.scaleId}|${fc.figureTypeId}`] = fc;
+      }
+      const paintMap = {};
+      for (const pc of (store.paintCosts || [])) {
+        paintMap[`${pc.scaleId}|${pc.figureTypeId}|${pc.qualityId}`] = pc;
+      }
+      const basingMap = {};
+      for (const bc of (store.basingCosts || [])) {
+        basingMap[`${bc.materialId}|${bc.sizeId}`] = bc.costAUD;
+      }
+      const collections = {};
+      for (const item of store.items) {
+        const colId = item.collectionId || 'unknown';
+        if (!collections[colId]) collections[colId] = { collectionId: colId, items: 0, totalValueAUD: 0 };
+        collections[colId].items++;
+        if (item.category === 'MINIATURE') {
+          const qty = item.quantity || 1;
+          const nb = item.numberBases || 0;
+          const totalFigs = qty * nb;
+          const fc = figureMap[`${item.manufacturerId}|${item.scaleId}|${item.figureTypeId}`];
+          if (fc) collections[colId].totalValueAUD += fc.cost * (rateMap[fc.currency] || 1) * totalFigs;
+          const pc = paintMap[`${item.scaleId}|${item.figureTypeId}|${item.paintQualityId}`];
+          if (pc) collections[colId].totalValueAUD += pc.costUSD * (rateMap['USD'] || 1) * totalFigs;
+          if (item.baseMaterialId && item.baseSizeId) {
+            const basingRate = basingMap[`${item.baseMaterialId}|${item.baseSizeId}`] || 0;
+            collections[colId].totalValueAUD += basingRate * nb;
+          }
+        }
+      }
+      return { reportType, collections: Object.values(collections) };
+    }
+
+    return { reportType, rows: [], totalFigures: 0 };
   }
 
   // ─── USERS ────────────────────────────────────────────────────────────────

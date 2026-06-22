@@ -97,7 +97,7 @@ jobs:
         working-directory: frontend
         env:
           VITE_API_URL: ${{ needs.deploy-backend.outputs.api_url }}
-          VITE_ENVIRONMENT: stage
+          VITE_ENVIRONMENT: staging
           VITE_BASE_PATH: /HobbyDB-Stage/
         run: npm run build
 
