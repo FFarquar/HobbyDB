@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getItems, createItem, updateItem, deleteItem, getLookups } from '../../api/client.js';
-import { ITEM_CATEGORIES, PAINT_QUALITY_LABELS } from '../../config.js';
+import { ITEM_CATEGORIES } from '../../config.js';
 import { useToast } from '../Toast.jsx';
 import { useAuth } from '../../App.jsx';
 import ConfirmDialog from '../ConfirmDialog.jsx';
@@ -8,6 +8,7 @@ import ItemModal from './ItemModal.jsx';
 
 export default function ItemsView({ collection, group, onBack }) {
   const [items, setItems] = useState([]);
+  const [scales, setScales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
@@ -22,8 +23,12 @@ export default function ItemsView({ collection, group, onBack }) {
   async function load() {
     setLoading(true);
     try {
-      const data = await getItems(group.id);
+      const [data, scaleData] = await Promise.all([
+        getItems(group.id),
+        collection.category === 'MINIATURE' ? getLookups('SCALE') : Promise.resolve([]),
+      ]);
       setItems(data);
+      setScales(scaleData);
     } catch (err) {
       toast(err.message, 'error');
     } finally {
@@ -94,6 +99,7 @@ export default function ItemsView({ collection, group, onBack }) {
             <ItemCard
               key={item.id}
               item={item}
+              scales={scales}
               isAdmin={isAdmin}
               onEdit={() => { setEditTarget(item); setShowModal(true); }}
               onDelete={() => setDeleteTarget(item)}
@@ -126,7 +132,7 @@ export default function ItemsView({ collection, group, onBack }) {
   );
 }
 
-function ItemCard({ item, isAdmin, onEdit, onDelete }) {
+function ItemCard({ item, scales, isAdmin, onEdit, onDelete }) {
   const categoryLabel = ITEM_CATEGORIES.find(c => c.value === item.category)?.label || item.category;
 
   return (
@@ -143,7 +149,11 @@ function ItemCard({ item, isAdmin, onEdit, onDelete }) {
             {item.scaleName && <span>Scale: {item.scaleName}</span>}
             {item.manufacturerName && <span>Mfr: {item.manufacturerName}</span>}
             {item.figureTypeName && <span>Type: {item.figureTypeName}</span>}
-            {item.paintQualityId && <span>Paint: {PAINT_QUALITY_LABELS[item.paintQualityId] || `Level ${item.paintQualityId}`}</span>}
+            {item.paintQualityId && (() => {
+              const scale = scales.find(s => s.id === item.scaleId);
+              const name = scale?.qualityNames?.[parseInt(item.paintQualityId) - 1] ?? item.paintQualityName;
+              return name ? <span>Paint: {name}</span> : null;
+            })()}
             {item.numberBases > 0 && <span>Bases: {item.numberBases}</span>}
           </div>
         )}

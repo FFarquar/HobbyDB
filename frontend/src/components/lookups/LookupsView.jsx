@@ -26,7 +26,6 @@ const SIDEBAR = [
       { key: 'RULES',        label: 'Rules Sets',      hint: 'e.g. DBM, FOG, Chain of Command' },
       { key: 'BASESIZE',     label: 'Base Sizes',      hint: 'e.g. 40×40mm, 60×30mm' },
       { key: 'BASEMATERIAL', label: 'Base Materials',  hint: 'e.g. Metal, MDF, Plastic' },
-      { key: 'PAINTQUALITY', label: 'Paint Quality',   hint: 'Labels for each paint level' },
     ],
   },
   {
