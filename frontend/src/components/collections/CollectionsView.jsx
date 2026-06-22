@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getCollections, createCollection, updateCollection, deleteCollection } from '../../api/client.js';
+import ImageGallery from '../ImageGallery.jsx';
 import { ITEM_CATEGORIES } from '../../config.js';
 import { useToast } from '../Toast.jsx';
 import { useAuth } from '../../App.jsx';
@@ -138,17 +139,24 @@ function CollectionModal({ initial, onSave, onClose }) {
   const [category, setCategory] = useState(initial?.category || 'MINIATURE');
   const [description, setDescription] = useState(initial?.description || '');
   const [saving, setSaving] = useState(false);
+  const galleryRef = useRef(null);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setSaving(true);
-    await onSave({ name, category, description });
-    setSaving(false);
+    try {
+      if (galleryRef.current) await galleryRef.current.flush();
+      await onSave({ name, category, description });
+    } catch {
+      // flush errors are toasted by ImageGallery; save errors by parent
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+    <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <span className="modal-title">{initial ? 'Edit Collection' : 'New Collection'}</span>
           <button className="btn btn-icon" onClick={onClose}>✕</button>
@@ -169,6 +177,11 @@ function CollectionModal({ initial, onSave, onClose }) {
               <label>Description</label>
               <input className="form-control" value={description} onChange={e => setDescription(e.target.value)} />
             </div>
+            {initial && (
+              <div className="form-group">
+                <ImageGallery ref={galleryRef} entityId={initial.id} />
+              </div>
+            )}
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
@@ -181,3 +194,4 @@ function CollectionModal({ initial, onSave, onClose }) {
     </div>
   );
 }
+

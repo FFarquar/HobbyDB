@@ -12,6 +12,7 @@ export default function ItemsView({ collection, group, onBack }) {
   const [showModal, setShowModal] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [lastForm, setLastForm] = useState(null);
   const toast = useToast();
   const { auth } = useAuth();
   const isAdmin = auth?.role === 'ADMIN';
@@ -39,6 +40,7 @@ export default function ItemsView({ collection, group, onBack }) {
       } else {
         const created = await createItem(group.id, { ...formData, collectionId: collection.id });
         setItems(is => [...is, created]);
+        setLastForm(formData);
         toast('Item added', 'success');
       }
       setShowModal(false);
@@ -103,6 +105,7 @@ export default function ItemsView({ collection, group, onBack }) {
       {showModal && (
         <ItemModal
           initial={editTarget}
+          template={editTarget ? null : lastForm}
           collectionCategory={collection.category}
           groupId={group.id}
           onSave={handleSave}
