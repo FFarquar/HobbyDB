@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getLookups, createLookup, updateLookup, getScaleFigureTypes, getPaintCosts, upsertPaintCost, getBasingCosts, upsertBasingCost, getFigureCosts, upsertFigureCost, getExchangeRates } from '../../api/client.js';
+import { getLookups, createLookup, updateLookup, getScaleFigureTypes, addScaleFigureType, getPaintCosts, upsertPaintCost, getBasingCosts, upsertBasingCost, getFigureCosts, upsertFigureCost, getExchangeRates } from '../../api/client.js';
 import { PAINT_QUALITY_LABELS } from '../../config.js';
 
 // Maps each lookup type to the form fields it populates
@@ -91,13 +91,20 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
   }
 
   async function handleSetPaintCost(costUSD) {
-    const entry = { scaleId: form.scaleId, figureTypeId: form.figureTypeId, qualityId: String(form.paintQualityId), costUSD };
+    const scaleData = (lookups.SCALE || []).find(s => s.id === form.scaleId);
+    const qualityId = (scaleData?.qualityNames?.length ?? 0) > 0 ? String(form.paintQualityId) : '0';
+    const entry = { scaleId: form.scaleId, figureTypeId: form.figureTypeId, qualityId, costUSD };
     await upsertPaintCost(entry);
     setPaintCosts(prev => {
       const idx = prev.findIndex(c => c.scaleId === entry.scaleId && c.figureTypeId === entry.figureTypeId && c.qualityId === entry.qualityId);
       if (idx === -1) return [...prev, entry];
       const next = [...prev]; next[idx] = entry; return next;
     });
+    const alreadyLinked = scaleFigureTypes.some(l => l.scaleId === form.scaleId && l.figureTypeId === form.figureTypeId);
+    if (!alreadyLinked) {
+      const link = await addScaleFigureType({ scaleId: form.scaleId, figureTypeId: form.figureTypeId });
+      setScaleFigureTypes(prev => [...prev, link]);
+    }
   }
 
   async function handleSetBasingCost(costAUD) {
@@ -124,8 +131,13 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
     && !basingCosts.some(c => c.materialId === form.baseMaterialId && c.sizeId === form.baseSizeId);
   const missingFigureCost = !loading && category === 'MINIATURE' && !!form.manufacturerId && !!form.scaleId && !!form.figureTypeId
     && !figureCosts.some(c => c.manufacturerId === form.manufacturerId && c.scaleId === form.scaleId && c.figureTypeId === form.figureTypeId);
-  const missingPaintCost = !loading && category === 'MINIATURE' && !!form.scaleId && !!form.figureTypeId && !!form.paintQualityId
-    && !paintCosts.some(c => c.scaleId === form.scaleId && c.figureTypeId === form.figureTypeId && c.qualityId === String(form.paintQualityId));
+  const selectedScaleData = (lookups.SCALE || []).find(s => s.id === form.scaleId);
+  const scaleHasQualityLevels = (selectedScaleData?.qualityNames?.length ?? 0) > 0;
+  // For scales with no quality levels, use qualityId "0" (flat rate sentinel, never conflicts with real quality IDs 1-4)
+  const effectivePaintQualityId = scaleHasQualityLevels ? form.paintQualityId : (form.scaleId ? '0' : null);
+  const missingPaintCost = !loading && category === 'MINIATURE' && !!form.scaleId && !!form.figureTypeId
+    && !!effectivePaintQualityId
+    && !paintCosts.some(c => c.scaleId === form.scaleId && c.figureTypeId === form.figureTypeId && c.qualityId === String(effectivePaintQualityId));
   const missingMiniatureFields = category !== 'MINIATURE' ? [] : [
     [!form.scaleId,            'Scale'],
     [!form.manufacturerId,     'Manufacturer'],
@@ -133,7 +145,8 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
     [!form.nationalityId,      'Nationality'],
     [form.quantity == null,    'Figures per Base'],
     [form.numberBases == null, 'Number of Bases'],
-    [!form.paintQualityId,     'Paint Quality'],
+    [scaleHasQualityLevels && !form.paintQualityId, 'Paint Quality'],
+    [missingPaintCost,         'Painting Rate'],
     [!form.baseSizeId,                                          'Base Size'],
     [form.baseSizeId !== 'base-none' && !form.baseMaterialId,  'Base Material'],
   ].filter(([missing]) => missing).map(([, label]) => label);
@@ -152,8 +165,8 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
     ? selectedFigureCost.cost * (rateMap[selectedFigureCost.currency] || 1) * totalFigures
     : null;
 
-  const selectedPaintCost = category === 'MINIATURE'
-    ? paintCosts.find(c => c.scaleId === form.scaleId && c.figureTypeId === form.figureTypeId && c.qualityId === String(form.paintQualityId))
+  const selectedPaintCost = category === 'MINIATURE' && effectivePaintQualityId
+    ? paintCosts.find(c => c.scaleId === form.scaleId && c.figureTypeId === form.figureTypeId && c.qualityId === String(effectivePaintQualityId))
     : null;
   const paintValueAUD = selectedPaintCost
     ? selectedPaintCost.costUSD * (rateMap['USD'] || 1) * totalFigures
@@ -498,7 +511,7 @@ function MiniatureFields({ form, set, lookups, scaleFigureTypes, paintCosts, bas
   function handleScaleChange(id) {
     handleLookupChange('scaleId', 'scaleName', 'SCALE', id);
     const scale = (lookups.SCALE || []).find(s => s.id === id);
-    const newMaxLevel = scale?.qualityNames?.length ?? scale?.paintLevels ?? Object.keys(PAINT_QUALITY_LABELS).length;
+    const newMaxLevel = scale?.qualityNames?.length ?? 0;
     if (form.paintQualityId && parseInt(form.paintQualityId) > newMaxLevel) {
       set('paintQualityId', null);
       set('paintQualityName', '');
@@ -515,9 +528,7 @@ function MiniatureFields({ form, set, lookups, scaleFigureTypes, paintCosts, bas
   const figureTypeLookups = { ...lookups, FIGURETYPE: filteredFigureTypes };
 
   const selectedScale = (lookups.SCALE || []).find(s => s.id === form.scaleId);
-  const scaleQualityNames = selectedScale?.qualityNames?.length
-    ? selectedScale.qualityNames
-    : Object.values(PAINT_QUALITY_LABELS).slice(0, selectedScale?.paintLevels ?? Object.keys(PAINT_QUALITY_LABELS).length);
+  const scaleQualityNames = selectedScale?.qualityNames?.length ? selectedScale.qualityNames : [];
 
   const missingRates = form.scaleId && form.figureTypeId && scaleQualityNames.length > 0
     && scaleQualityNames.some((_, i) =>
@@ -609,7 +620,7 @@ function MiniatureFields({ form, set, lookups, scaleFigureTypes, paintCosts, bas
       {missingPaintCost && (
         <div style={{ marginBottom: 12 }}>
           <span style={{ fontSize: 12, color: 'var(--danger)' }}>
-            No painting rate set for {form.scaleName} {form.figureTypeName} at this quality level — save is blocked.
+            No painting rate set for {form.scaleName} {form.figureTypeName}{scaleQualityNames.length > 0 ? ' at this quality level' : ''} — save is blocked.
           </span>
           <InlineCostSetter label="Painting rate per figure (USD)" onSet={onSetPaintCost} />
         </div>
@@ -700,6 +711,47 @@ function BoardGameFields({ form, set }) {
           <input className="form-control" type="number" min="1" value={form.playTimeMinutes || ''} onChange={e => set('playTimeMinutes', parseInt(e.target.value) || null)} />
         </div>
       </div>
+      <hr className="divider" />
+      <div className="form-row">
+        <div className="form-group">
+          <label>Cost</label>
+          <input
+            className="form-control"
+            type="number"
+            min="0"
+            step="0.01"
+            value={form.purchasePriceAmt ?? ''}
+            onChange={e => set('purchasePriceAmt', e.target.value !== '' ? parseFloat(e.target.value) : null)}
+            placeholder="0.00"
+          />
+        </div>
+        <div className="form-group">
+          <label>Currency</label>
+          <select
+            className="form-control"
+            value={form.purchasePriceCurrency || ''}
+            onChange={e => set('purchasePriceCurrency', e.target.value || null)}
+          >
+            <option value="">— select —</option>
+            <option value="AUD">AUD</option>
+            <option value="USD">USD</option>
+            <option value="GBP">GBP</option>
+            <option value="EUR">EUR</option>
+            <option value="CAD">CAD</option>
+          </select>
+        </div>
+      </div>
+      <div className="form-row">
+        <div className="form-group">
+          <label>Date Purchased</label>
+          <input
+            className="form-control"
+            type="date"
+            value={form.datePurchased || ''}
+            onChange={e => set('datePurchased', e.target.value || null)}
+          />
+        </div>
+      </div>
     </>
   );
 }
@@ -726,6 +778,47 @@ function BookFields({ form, set }) {
         <div className="form-group">
           <label>Publish Year</label>
           <input className="form-control" type="number" value={form.publishYear || ''} onChange={e => set('publishYear', parseInt(e.target.value) || null)} />
+        </div>
+      </div>
+      <hr className="divider" />
+      <div className="form-row">
+        <div className="form-group">
+          <label>Cost</label>
+          <input
+            className="form-control"
+            type="number"
+            min="0"
+            step="0.01"
+            value={form.purchasePriceAmt ?? ''}
+            onChange={e => set('purchasePriceAmt', e.target.value !== '' ? parseFloat(e.target.value) : null)}
+            placeholder="0.00"
+          />
+        </div>
+        <div className="form-group">
+          <label>Currency</label>
+          <select
+            className="form-control"
+            value={form.purchasePriceCurrency || ''}
+            onChange={e => set('purchasePriceCurrency', e.target.value || null)}
+          >
+            <option value="">— select —</option>
+            <option value="AUD">AUD</option>
+            <option value="USD">USD</option>
+            <option value="GBP">GBP</option>
+            <option value="EUR">EUR</option>
+            <option value="CAD">CAD</option>
+          </select>
+        </div>
+      </div>
+      <div className="form-row">
+        <div className="form-group">
+          <label>Date Purchased</label>
+          <input
+            className="form-control"
+            type="date"
+            value={form.datePurchased || ''}
+            onChange={e => set('datePurchased', e.target.value || null)}
+          />
         </div>
       </div>
     </>

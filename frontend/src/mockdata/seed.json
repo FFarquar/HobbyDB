@@ -65,7 +65,7 @@
     "SCALE": [
       { "id": "scale-6mm",  "type": "SCALE", "label": "6mm",  "abbreviation": "6mm",  "sortOrder": 1, "active": true, "qualityNames": ["Wargamer", "Collector"] },
       { "id": "scale-10mm", "type": "SCALE", "label": "10mm", "abbreviation": "10mm", "sortOrder": 2, "active": true, "qualityNames": ["Wargamer", "Standard", "Collector"] },
-      { "id": "scale-15mm", "type": "SCALE", "label": "15mm", "abbreviation": "15mm", "sortOrder": 3, "active": true, "qualityNames": ["Wargamer", "Standard", "Collector"] },
+      { "id": "scale-15mm", "type": "SCALE", "label": "15mm", "abbreviation": "15mm", "sortOrder": 3, "active": true },
       { "id": "scale-25mm", "type": "SCALE", "label": "25mm", "abbreviation": "25mm", "sortOrder": 4, "active": true, "qualityNames": ["Wargamer", "Standard", "Collector", "Gallery"] },
       { "id": "scale-28mm", "type": "SCALE", "label": "28mm", "abbreviation": "28mm", "sortOrder": 5, "active": true, "qualityNames": ["Wargamer", "Standard", "Collector", "Gallery"] }
     ],
@@ -123,15 +123,7 @@
     { "scaleId": "scale-6mm",  "figureTypeId": "ft-infantry", "qualityId": "1", "costUSD": 0.5 },
     { "scaleId": "scale-6mm",  "figureTypeId": "ft-infantry", "qualityId": "2", "costUSD": 1.0 },
     { "scaleId": "scale-6mm",  "figureTypeId": "ft-infantry", "qualityId": "3", "costUSD": 1.5 },
-    { "scaleId": "scale-6mm",  "figureTypeId": "ft-infantry", "qualityId": "4", "costUSD": 3.0 },
-    { "scaleId": "scale-15mm", "figureTypeId": "ft-infantry", "qualityId": "1", "costUSD": 1.5 },
-    { "scaleId": "scale-15mm", "figureTypeId": "ft-infantry", "qualityId": "2", "costUSD": 2.5 },
-    { "scaleId": "scale-15mm", "figureTypeId": "ft-infantry", "qualityId": "3", "costUSD": 4.0 },
-    { "scaleId": "scale-15mm", "figureTypeId": "ft-infantry", "qualityId": "4", "costUSD": 8.0 },
-    { "scaleId": "scale-15mm", "figureTypeId": "ft-cavalry",  "qualityId": "1", "costUSD": 2.5 },
-    { "scaleId": "scale-15mm", "figureTypeId": "ft-cavalry",  "qualityId": "2", "costUSD": 4.0 },
-    { "scaleId": "scale-15mm", "figureTypeId": "ft-cavalry",  "qualityId": "3", "costUSD": 6.0 },
-    { "scaleId": "scale-15mm", "figureTypeId": "ft-cavalry",  "qualityId": "4", "costUSD": 12.0 }
+    { "scaleId": "scale-6mm",  "figureTypeId": "ft-infantry", "qualityId": "4", "costUSD": 3.0 }
   ],
   "basingCosts": [
     { "materialId": "mat-metal",   "sizeId": "base-40x20",  "costAUD": 0.25 },

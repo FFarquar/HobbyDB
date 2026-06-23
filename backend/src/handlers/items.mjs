@@ -11,8 +11,8 @@ import { ddb, TABLE_NAME, ok, created, noContent, badRequest, serverError, newId
 //   paintQualityId, paintQualityName, baseSizeId, baseMaterialId,
 //   numberBases, purchasePriceAmt, purchasePriceCurrency
 //
-// BoardGame-specific: publisher, minPlayers, maxPlayers, playTime, bggId
-// Book-specific: author, isbn, publisher, publishYear
+// BoardGame-specific: publisher, minPlayers, maxPlayers, playTimeMinutes, bggId, purchasePriceAmt, purchasePriceCurrency, datePurchased
+// Book-specific: author, isbn, publisher, publishYear, purchasePriceAmt, purchasePriceCurrency, datePurchased
 // Terrain-specific: scale, material
 // Other: customFields (free text)
 
@@ -110,6 +110,9 @@ function buildCategoryFields(category, body) {
         maxPlayers: body.maxPlayers || null,
         playTimeMinutes: body.playTimeMinutes || null,
         bggId: body.bggId || '',
+        purchasePriceAmt: body.purchasePriceAmt || null,
+        purchasePriceCurrency: body.purchasePriceCurrency || null,
+        datePurchased: body.datePurchased || null,
       };
     case 'BOOK':
       return {
@@ -117,6 +120,9 @@ function buildCategoryFields(category, body) {
         isbn: body.isbn || '',
         publisher: body.publisher || '',
         publishYear: body.publishYear || null,
+        purchasePriceAmt: body.purchasePriceAmt || null,
+        purchasePriceCurrency: body.purchasePriceCurrency || null,
+        datePurchased: body.datePurchased || null,
       };
     case 'TERRAIN':
       return {
@@ -145,6 +151,7 @@ async function updateItem(groupId, id, event) {
     'nationalityId', 'periodId', 'rulesId', 'paintQualityId', 'paintQualityName',
     'baseSizeId', 'baseMaterialId', 'numberBases', 'purchasePriceAmt', 'purchasePriceCurrency',
     'publisher', 'minPlayers', 'maxPlayers', 'playTimeMinutes', 'bggId',
+    'datePurchased',
     'author', 'isbn', 'publishYear', 'material', 'customFields'];
 
   for (const field of simpleFields) {

@@ -179,6 +179,8 @@ function ItemCard({ item, scales, isAdmin, onEdit, onDelete }) {
             {item.publisher && <span>Publisher: {item.publisher}</span>}
             {item.minPlayers && <span>Players: {item.minPlayers}{item.maxPlayers !== item.minPlayers ? `–${item.maxPlayers}` : ''}</span>}
             {item.playTimeMinutes && <span>Time: {item.playTimeMinutes} min</span>}
+            {item.purchasePriceAmt != null && <span>Cost: {item.purchasePriceCurrency || ''} {item.purchasePriceAmt.toFixed(2)}</span>}
+            {item.datePurchased && <span>Purchased: {item.datePurchased}</span>}
           </div>
         )}
         {item.category === 'BOOK' && (
@@ -186,6 +188,8 @@ function ItemCard({ item, scales, isAdmin, onEdit, onDelete }) {
             {item.author && <span>Author: {item.author}</span>}
             {item.isbn && <span>ISBN: {item.isbn}</span>}
             {item.publishYear && <span>{item.publishYear}</span>}
+            {item.purchasePriceAmt != null && <span>Cost: {item.purchasePriceCurrency || ''} {item.purchasePriceAmt.toFixed(2)}</span>}
+            {item.datePurchased && <span>Purchased: {item.datePurchased}</span>}
           </div>
         )}
         {item.notes && <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4, fontStyle: 'italic' }}>{item.notes}</div>}
