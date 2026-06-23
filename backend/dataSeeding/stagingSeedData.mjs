@@ -156,11 +156,7 @@ const lookups = [
   { id: "per-acw",        type: "PERIOD", label: "American Civil War", abbreviation: "ACW", sortOrder: 4 },
   { id: "per-ww2",        type: "PERIOD", label: "World War II",      abbreviation: "WW2", sortOrder: 5 },
 
-  { id: "rules-dbm",        type: "RULES", label: "DBM",             abbreviation: "DBM", sortOrder: 1 },
-  { id: "rules-fog",        type: "RULES", label: "Field of Glory",  abbreviation: "FoG", sortOrder: 2 },
-  { id: "rules-grandarmee", type: "RULES", label: "Grande Armée",    abbreviation: "GA",  sortOrder: 3 },
-  { id: "rules-coc",        type: "RULES", label: "Chain of Command", abbreviation: "CoC", sortOrder: 4 },
-
+  { id: "base-none",   type: "BASESIZE", label: "Not Based",  abbreviation: "None",   sortOrder: 0 },
   { id: "base-40x20",  type: "BASESIZE", label: "40×20mm",   abbreviation: "40×20",  sortOrder: 1 },
   { id: "base-40x30",  type: "BASESIZE", label: "40×30mm",   abbreviation: "40×30",  sortOrder: 2 },
   { id: "base-60x30",  type: "BASESIZE", label: "60×30mm",   abbreviation: "60×30",  sortOrder: 3 },

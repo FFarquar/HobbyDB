@@ -13,7 +13,7 @@ const FIELD_MAP = {
 };
 
 export default function ItemModal({ initial, template, collectionCategory, onSave, onClose }) {
-  const seed = initial || template || { quantity: 1 };
+  const seed = initial || template || {};
   const [category, setCategory] = useState(seed.category || collectionCategory || 'MINIATURE');
   const [form, setForm] = useState(seed);
   const [lookups, setLookups] = useState({});
@@ -23,12 +23,14 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
   const [figureCosts, setFigureCosts] = useState([]);
   const [exchangeRates, setExchangeRates] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(category === 'MINIATURE' || category === 'TERRAIN');
 
   useEffect(() => {
     if (category === 'MINIATURE' || category === 'TERRAIN') loadLookups();
   }, [category]);
 
   async function loadLookups() {
+    setLoading(true);
     const types = category === 'MINIATURE'
       ? ['SCALE', 'MANUFACTURER', 'FIGURETYPE', 'NATIONALITY', 'BASESIZE', 'BASEMATERIAL', 'PAINTQUALITY']
       : ['SCALE'];
@@ -48,6 +50,7 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
     setBasingCosts(baseCosts);
     setFigureCosts(figCosts);
     setExchangeRates(rates);
+    setLoading(false);
   }
 
   function set(field, value) {
@@ -117,15 +120,24 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
     });
   }
 
-  const missingBasingCost = category === 'MINIATURE' && !!form.baseSizeId && !!form.baseMaterialId
+  const missingBasingCost = !loading && category === 'MINIATURE' && !!form.baseSizeId && !!form.baseMaterialId
     && !basingCosts.some(c => c.materialId === form.baseMaterialId && c.sizeId === form.baseSizeId);
-  const missingFigureCost = category === 'MINIATURE' && !!form.manufacturerId && !!form.scaleId && !!form.figureTypeId
+  const missingFigureCost = !loading && category === 'MINIATURE' && !!form.manufacturerId && !!form.scaleId && !!form.figureTypeId
     && !figureCosts.some(c => c.manufacturerId === form.manufacturerId && c.scaleId === form.scaleId && c.figureTypeId === form.figureTypeId);
-  const missingPaintCost = category === 'MINIATURE' && !!form.scaleId && !!form.figureTypeId && !!form.paintQualityId
+  const missingPaintCost = !loading && category === 'MINIATURE' && !!form.scaleId && !!form.figureTypeId && !!form.paintQualityId
     && !paintCosts.some(c => c.scaleId === form.scaleId && c.figureTypeId === form.figureTypeId && c.qualityId === String(form.paintQualityId));
-  const missingRequiredFields = category === 'MINIATURE' && (
-    !form.paintQualityId || !form.baseSizeId || !form.baseMaterialId
-  );
+  const missingMiniatureFields = category !== 'MINIATURE' ? [] : [
+    [!form.scaleId,            'Scale'],
+    [!form.manufacturerId,     'Manufacturer'],
+    [!form.figureTypeId,       'Figure Type'],
+    [!form.nationalityId,      'Nationality'],
+    [form.quantity == null,    'Figures per Base'],
+    [form.numberBases == null, 'Number of Bases'],
+    [!form.paintQualityId,     'Paint Quality'],
+    [!form.baseSizeId,                                          'Base Size'],
+    [form.baseSizeId !== 'base-none' && !form.baseMaterialId,  'Base Material'],
+  ].filter(([missing]) => missing).map(([, label]) => label);
+  const missingRequiredFields = missingMiniatureFields.length > 0;
   const canSave = !missingBasingCost && !missingFigureCost && !missingPaintCost && !missingRequiredFields;
 
   // Calculated item value
@@ -245,7 +257,7 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
             <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
             {missingRequiredFields && (
               <span style={{ fontSize: 12, color: 'var(--danger)', marginRight: 'auto', alignSelf: 'center' }}>
-                Paint Quality, Base Size and Base Material are required.
+                Required: {missingMiniatureFields.join(', ')}
               </span>
             )}
             <button type="submit" className="btn btn-primary" disabled={saving || !canSave}>{saving ? 'Saving…' : 'Save'}</button>
@@ -313,15 +325,15 @@ function InlineCostSetter({ label, onSet, currencies }) {
 
 // ─── Lookup select with quick-add ────────────────────────────────────────────
 
-function LookupSelect({ label, type, lookups, value, onChange, onQuickAdd }) {
+function LookupSelect({ label, type, lookups, value, onChange, onQuickAdd, disabled }) {
   const [showAdd, setShowAdd] = useState(false);
 
   return (
     <div className="form-group">
       <label>{label}</label>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <select className="form-control" value={value || ''} onChange={e => onChange(e.target.value)}>
-          <option value="">— select —</option>
+        <select className="form-control" value={value || ''} onChange={e => onChange(e.target.value)} disabled={disabled}>
+          <option value="">{disabled ? '— N/A —' : '— select —'}</option>
           {(lookups[type] || []).map(l => (
             <option key={l.id} value={l.id}>
               {l.label}
@@ -333,6 +345,7 @@ function LookupSelect({ label, type, lookups, value, onChange, onQuickAdd }) {
           className="btn btn-icon"
           title={`Add new ${label}`}
           style={{ flexShrink: 0, fontSize: 18, lineHeight: 1 }}
+          disabled={disabled}
           onClick={() => setShowAdd(true)}
         >
           +
@@ -541,13 +554,13 @@ function MiniatureFields({ form, set, lookups, scaleFigureTypes, paintCosts, bas
       <div className="form-row">
         <div className="form-group">
           <label>Figures per Base</label>
-          <input className="form-control" type="number" min="1" value={form.quantity || 1}
-            onChange={e => set('quantity', parseInt(e.target.value) || 1)} />
+          <input className="form-control" type="number" min="1" value={form.quantity ?? ''}
+            onChange={e => set('quantity', e.target.value !== '' ? parseInt(e.target.value) : null)} />
         </div>
         <div className="form-group">
           <label>Number of Bases</label>
-          <input className="form-control" type="number" min="0" value={form.numberBases || 0}
-            onChange={e => set('numberBases', parseInt(e.target.value) || 0)} />
+          <input className="form-control" type="number" min="0" value={form.numberBases ?? ''}
+            onChange={e => set('numberBases', e.target.value !== '' ? parseInt(e.target.value) : null)} />
         </div>
       </div>
       <div className="form-row">
@@ -604,9 +617,13 @@ function MiniatureFields({ form, set, lookups, scaleFigureTypes, paintCosts, bas
       <div className="form-row">
         <LookupSelect label="Base Size" type="BASESIZE" lookups={lookups} onQuickAdd={onQuickAdd}
           value={form.baseSizeId}
-          onChange={id => handleLookupChange('baseSizeId', 'baseSizeName', 'BASESIZE', id)} />
+          onChange={id => {
+            handleLookupChange('baseSizeId', 'baseSizeName', 'BASESIZE', id);
+            if (id === 'base-none') handleLookupChange('baseMaterialId', 'baseMaterialName', 'BASEMATERIAL', '');
+          }} />
         <LookupSelect label="Base Material" type="BASEMATERIAL" lookups={lookups} onQuickAdd={onQuickAdd}
           value={form.baseMaterialId}
+          disabled={form.baseSizeId === 'base-none'}
           onChange={id => handleLookupChange('baseMaterialId', 'baseMaterialName', 'BASEMATERIAL', id)} />
       </div>
       {missingBasingCost && (

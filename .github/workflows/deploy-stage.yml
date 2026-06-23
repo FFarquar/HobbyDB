@@ -62,7 +62,8 @@ jobs:
             --parameter-overrides Environment=${{ env.ENVIRONMENT }} AuthSecret="$AUTH_SECRET" \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
-            --resolve-s3
+            --resolve-s3 \
+            --s3-prefix hobbydb/stage
 
       - name: Get API URL from stack outputs
         id: get-url

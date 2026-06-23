@@ -22,7 +22,6 @@ function buildLastItemTemplate(items, category) {
     baseSizeName: last.baseSizeName,
     baseMaterialId: last.baseMaterialId,
     baseMaterialName: last.baseMaterialName,
-    quantity: 1,
   };
 }
 

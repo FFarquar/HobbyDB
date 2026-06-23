@@ -10,6 +10,29 @@ export function useAuth() {
   return useContext(AuthContext);
 }
 
+function isTokenExpired(token) {
+  try {
+    const parts = token.split('.');
+    // Real JWT has 3 parts; mock token is plain base64 JSON
+    const raw = parts.length === 3
+      ? parts[1].replace(/-/g, '+').replace(/_/g, '/')
+      : token;
+    const payload = JSON.parse(atob(raw));
+    if (!payload.exp) return false;
+    // Real JWT exp is in seconds; mock exp is in milliseconds
+    const expMs = payload.exp > 1e10 ? payload.exp : payload.exp * 1000;
+    return expMs <= Date.now();
+  } catch {
+    return true;
+  }
+}
+
+function clearStoredAuth() {
+  localStorage.removeItem('authToken');
+  localStorage.removeItem('userRole');
+  localStorage.removeItem('userLoginID');
+}
+
 export default function App() {
   const [auth, setAuth] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -18,7 +41,11 @@ export default function App() {
     const token = localStorage.getItem('authToken');
     const role = localStorage.getItem('userRole');
     const loginID = localStorage.getItem('userLoginID');
-    if (token && role && loginID) setAuth({ token, role, loginID });
+    if (token && role && loginID && !isTokenExpired(token)) {
+      setAuth({ token, role, loginID });
+    } else if (token) {
+      clearStoredAuth();
+    }
     setLoading(false);
   }, []);
 
@@ -30,9 +57,7 @@ export default function App() {
   }
 
   function handleLogout() {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('userLoginID');
+    clearStoredAuth();
     setAuth(null);
   }
 

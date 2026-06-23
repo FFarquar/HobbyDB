@@ -1,13 +1,13 @@
-import { QueryCommand, PutCommand, UpdateCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
+import { QueryCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { ddb, TABLE_NAME, ok, created, noContent, badRequest, notFound, serverError, newId, now, requireAdmin } from './_shared.mjs';
 
 // PK: LOOKUP#<TYPE>   SK: VALUE#<id>
 //
 // Valid lookup types:
-//   SCALE, MANUFACTURER, FIGURETYPE, NATIONALITY, PERIOD, RULES,
+//   SCALE, MANUFACTURER, FIGURETYPE, NATIONALITY, PERIOD,
 //   BASESIZE, BASEMATERIAL, PAINTQUALITY
 
-const VALID_TYPES = ['SCALE', 'MANUFACTURER', 'FIGURETYPE', 'NATIONALITY', 'PERIOD', 'RULES', 'BASESIZE', 'BASEMATERIAL', 'PAINTQUALITY'];
+const VALID_TYPES = ['SCALE', 'MANUFACTURER', 'FIGURETYPE', 'NATIONALITY', 'PERIOD', 'BASESIZE', 'BASEMATERIAL', 'PAINTQUALITY'];
 
 export const handler = async (event) => {
   const method = event.httpMethod || event.requestContext?.http?.method;
@@ -91,7 +91,48 @@ async function updateLookup(type, id, event) {
     ConditionExpression: 'attribute_exists(PK)',
     ReturnValues: 'ALL_NEW',
   }));
+
+  if (body.label !== undefined) {
+    await cascadeLabelToItems(type, id, body.label);
+  }
+
   return ok(result.Attributes);
+}
+
+const ITEM_NAME_FIELDS = {
+  FIGURETYPE:   { idField: 'figureTypeId',   nameField: 'figureTypeName' },
+  SCALE:        { idField: 'scaleId',         nameField: 'scaleName' },
+  MANUFACTURER: { idField: 'manufacturerId',  nameField: 'manufacturerName' },
+  PAINTQUALITY: { idField: 'paintQualityId',  nameField: 'paintQualityName' },
+};
+
+async function cascadeLabelToItems(type, id, newLabel) {
+  const mapping = ITEM_NAME_FIELDS[type];
+  if (!mapping) return;
+
+  const { idField, nameField } = mapping;
+  const timestamp = now();
+  let lastKey;
+
+  do {
+    const scanResult = await ddb.send(new ScanCommand({
+      TableName: TABLE_NAME,
+      FilterExpression: `${idField} = :id AND begins_with(SK, :skPrefix)`,
+      ExpressionAttributeValues: { ':id': id, ':skPrefix': 'ITEM#' },
+      ExclusiveStartKey: lastKey,
+    }));
+
+    await Promise.all((scanResult.Items || []).map(item =>
+      ddb.send(new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: item.PK, SK: item.SK },
+        UpdateExpression: `SET ${nameField} = :name, updatedAt = :ts`,
+        ExpressionAttributeValues: { ':name': newLabel, ':ts': timestamp },
+      }))
+    ));
+
+    lastKey = scanResult.LastEvaluatedKey;
+  } while (lastKey);
 }
 
 async function deleteLookup(type, id, event) {

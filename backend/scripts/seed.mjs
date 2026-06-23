@@ -133,17 +133,8 @@ async function seedLookups() {
     { type: 'PERIOD', id: 'per-ww2',        label: 'World War II',       abbreviation: 'WW2',  sortOrder: 8 },
     { type: 'PERIOD', id: 'per-modern',     label: 'Modern',             abbreviation: 'Mod',  sortOrder: 9 },
 
-    // Rules
-    { type: 'RULES', id: 'rules-dbm',        label: 'DBM',              abbreviation: 'DBM',  sortOrder: 1 },
-    { type: 'RULES', id: 'rules-dbmm',       label: 'DBMM',             abbreviation: 'DBMM', sortOrder: 2 },
-    { type: 'RULES', id: 'rules-fog',        label: 'Field of Glory',   abbreviation: 'FoG',  sortOrder: 3 },
-    { type: 'RULES', id: 'rules-fog2',       label: 'Field of Glory II',abbreviation: 'FoG2', sortOrder: 4 },
-    { type: 'RULES', id: 'rules-grandarmee', label: 'Grande Armée',     abbreviation: 'GA',   sortOrder: 5 },
-    { type: 'RULES', id: 'rules-blackpowder',label: 'Black Powder',     abbreviation: 'BP',   sortOrder: 6 },
-    { type: 'RULES', id: 'rules-coc',        label: 'Chain of Command', abbreviation: 'CoC',  sortOrder: 7 },
-    { type: 'RULES', id: 'rules-boltaction', label: 'Bolt Action',      abbreviation: 'BA',   sortOrder: 8 },
-
     // Base Sizes
+    { type: 'BASESIZE', id: 'base-none',   label: 'Not Based', abbreviation: 'None',   sortOrder: 0 },
     { type: 'BASESIZE', id: 'base-40x15',  label: '40×15mm',  abbreviation: '40×15',  sortOrder: 1 },
     { type: 'BASESIZE', id: 'base-40x20',  label: '40×20mm',  abbreviation: '40×20',  sortOrder: 2 },
     { type: 'BASESIZE', id: 'base-40x30',  label: '40×30mm',  abbreviation: '40×30',  sortOrder: 3 },

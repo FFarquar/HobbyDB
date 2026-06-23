@@ -37,7 +37,7 @@ async function listGroups(collectionId) {
 async function createGroup(collectionId, event) {
   if (!collectionId) return badRequest('collectionId is required');
   const body = JSON.parse(event.body || '{}');
-  const { name, description, notes } = body;
+  const { name, description, notes, scaleId, scaleName, periodId, periodName } = body;
   if (!name) return badRequest('name is required');
 
   const id = newId();
@@ -52,6 +52,10 @@ async function createGroup(collectionId, event) {
     name,
     description: description || '',
     notes: notes || '',
+    scaleId: scaleId || null,
+    scaleName: scaleName || '',
+    periodId: periodId || null,
+    periodName: periodName || '',
     createdAt: timestamp,
     updatedAt: timestamp,
   };
@@ -71,6 +75,10 @@ async function updateGroup(collectionId, id, event) {
   if (body.name !== undefined) { updates.push('#name = :name'); exprNames['#name'] = 'name'; exprValues[':name'] = body.name; }
   if (body.description !== undefined) { updates.push('description = :description'); exprValues[':description'] = body.description; }
   if (body.notes !== undefined) { updates.push('notes = :notes'); exprValues[':notes'] = body.notes; }
+  if (body.scaleId !== undefined) { updates.push('scaleId = :scaleId'); exprValues[':scaleId'] = body.scaleId; }
+  if (body.scaleName !== undefined) { updates.push('scaleName = :scaleName'); exprValues[':scaleName'] = body.scaleName; }
+  if (body.periodId !== undefined) { updates.push('periodId = :periodId'); exprValues[':periodId'] = body.periodId; }
+  if (body.periodName !== undefined) { updates.push('periodName = :periodName'); exprValues[':periodName'] = body.periodName; }
 
   const result = await ddb.send(new UpdateCommand({
     TableName: TABLE_NAME,

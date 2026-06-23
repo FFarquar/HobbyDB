@@ -23,7 +23,6 @@ const SIDEBAR = [
       { key: 'FIGURETYPE',   label: 'Figure Types',    hint: 'e.g. Infantry, Cavalry, Tank, Gun' },
       { key: 'NATIONALITY',  label: 'Nationalities',   hint: 'e.g. Roman, French, German' },
       { key: 'PERIOD',       label: 'Periods',         hint: 'e.g. Ancient, Napoleonic, WWII' },
-      { key: 'RULES',        label: 'Rules Sets',      hint: 'e.g. DBM, FOG, Chain of Command' },
       { key: 'BASESIZE',     label: 'Base Sizes',      hint: 'e.g. 40×40mm, 60×30mm' },
       { key: 'BASEMATERIAL', label: 'Base Materials',  hint: 'e.g. Metal, MDF, Plastic' },
     ],
