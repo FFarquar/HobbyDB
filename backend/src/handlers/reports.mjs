@@ -90,12 +90,13 @@ async function figuresByPeriod() {
 }
 
 async function collectionValue() {
-  const [items, figureCosts, paintCosts, basingCosts, exchangeRatesData] = await Promise.all([
+  const [items, figureCosts, paintCosts, basingCosts, exchangeRatesData, collectionsData] = await Promise.all([
     scanAllItems(),
     scanAllCosts('FIGURECOST#'),
     scanAllCosts('PAINTCOST#'),
     scanAllCosts('BASECOST#'),
     scanExchangeRates(),
+    scanAllCollections(),
   ]);
 
   const rateMap = { AUD: 1.0 };
@@ -114,10 +115,15 @@ async function collectionValue() {
     basingMap[`${bc.materialId}|${bc.sizeId}`] = bc.costAUD;
   }
 
+  const collectionNameMap = {};
+  for (const c of collectionsData) {
+    if (c.id) collectionNameMap[c.id] = c.name || c.id;
+  }
+
   const collections = {};
   for (const item of items) {
     const colId = item.collectionId || 'unknown';
-    if (!collections[colId]) collections[colId] = { collectionId: colId, items: 0, totalValueAUD: 0 };
+    if (!collections[colId]) collections[colId] = { collectionId: colId, collectionName: collectionNameMap[colId] || colId, items: 0, totalValueAUD: 0 };
     collections[colId].items++;
 
     if (item.category === 'MINIATURE') {
@@ -132,6 +138,9 @@ async function collectionValue() {
         const basingRate = basingMap[`${item.baseMaterialId}|${item.baseSizeId}`] || 0;
         collections[colId].totalValueAUD += basingRate * nb;
       }
+    } else if (item.purchasePriceAmt) {
+      const currency = item.purchasePriceCurrency || 'AUD';
+      collections[colId].totalValueAUD += item.purchasePriceAmt * (rateMap[currency] || 1);
     }
   }
 

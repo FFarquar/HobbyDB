@@ -6,6 +6,7 @@ import {
   getExchangeRates, upsertExchangeRate, deleteExchangeRate,
   getFigureCosts, upsertFigureCost, deleteFigureCost,
   getManufacturerNotes, upsertManufacturerNote,
+  getPaintRateNotes, upsertPaintRateNote,
   getScaleFigureTypes, addScaleFigureType, removeScaleFigureType,
 } from '../../api/client.js';
 import { PAINT_QUALITY_LABELS } from '../../config.js';
@@ -261,6 +262,7 @@ function PaintingRatesPanel() {
   const [figureTypes, setFigureTypes] = useState([]);
   const [links, setLinks] = useState([]);
   const [costs, setCosts] = useState([]);
+  const [paintNotes, setPaintNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
   const [addingToScale, setAddingToScale] = useState(null);
@@ -268,6 +270,8 @@ function PaintingRatesPanel() {
   const [quickAddFt, setQuickAddFt] = useState(false);
   const [editingLevels, setEditingLevels] = useState(null);
   const [editLevelNames, setEditLevelNames] = useState([]);
+  const [editingNotes, setEditingNotes] = useState(null);
+  const [notesDraft, setNotesDraft] = useState('');
   const toast = useToast();
 
   function getQualityNames(scale) {
@@ -295,8 +299,8 @@ function PaintingRatesPanel() {
   }
 
   useEffect(() => {
-    Promise.all([getLookups('SCALE'), getLookups('FIGURETYPE'), getScaleFigureTypes(), getPaintCosts()])
-      .then(([s, f, l, c]) => { setScales(s); setFigureTypes(f); setLinks(l); setCosts(c); })
+    Promise.all([getLookups('SCALE'), getLookups('FIGURETYPE'), getScaleFigureTypes(), getPaintCosts(), getPaintRateNotes()])
+      .then(([s, f, l, c, n]) => { setScales(s); setFigureTypes(f); setLinks(l); setCosts(c); setPaintNotes(n); })
       .catch(err => toast(err.message, 'error'))
       .finally(() => setLoading(false));
   }, []);
@@ -361,6 +365,33 @@ function PaintingRatesPanel() {
     const unlinked = getUnlinkedFigureTypes(scaleId);
     setAddFtId(unlinked[0]?.id || '');
     setEditing(null);
+  }
+
+  function getNoteForScale(scaleId) {
+    return paintNotes.find(n => n.scaleId === scaleId) || null;
+  }
+
+  function getLastUpdatedForScale(scaleId) {
+    const timestamps = costs.filter(c => c.scaleId === scaleId).map(c => c.updatedAt).filter(Boolean);
+    if (!timestamps.length) return null;
+    return timestamps.reduce((a, b) => (a > b ? a : b));
+  }
+
+  function openEditNotes(scaleId) {
+    setNotesDraft(getNoteForScale(scaleId)?.notes || '');
+    setEditingNotes(scaleId);
+  }
+
+  async function handleSaveNote(scaleId) {
+    try {
+      const updated = await upsertPaintRateNote({ scaleId, notes: notesDraft });
+      setPaintNotes(ns => {
+        const idx = ns.findIndex(n => n.scaleId === scaleId);
+        return idx === -1 ? [...ns, updated] : ns.map((n, i) => i === idx ? updated : n);
+      });
+      toast('Notes saved', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+    finally { setEditingNotes(null); }
   }
 
   return (
@@ -498,6 +529,53 @@ function PaintingRatesPanel() {
                     </table>
                   </div>
                 )}
+
+                {/* Notes + last updated footer */}
+                {(() => {
+                  const lastUpdated = getLastUpdatedForScale(scale.id);
+                  const noteRecord = getNoteForScale(scale.id);
+                  const isEditingNote = editingNotes === scale.id;
+                  return (
+                    <div style={{ padding: '8px 14px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0, marginTop: 2 }}>Notes:</span>
+                        {isEditingNote ? (
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <textarea
+                              className="form-control"
+                              value={notesDraft}
+                              onChange={e => setNotesDraft(e.target.value)}
+                              rows={3}
+                              placeholder="How were these rates derived? e.g. based on quotes from XYZ painter, Aug 2025"
+                              style={{ resize: 'vertical', fontSize: 12 }}
+                              autoFocus
+                            />
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button className="btn btn-sm btn-primary" onClick={() => handleSaveNote(scale.id)}>Save</button>
+                              <button className="btn btn-sm btn-ghost" onClick={() => setEditingNotes(null)}>Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                            <span
+                              style={{ fontSize: 12, color: noteRecord?.notes ? 'var(--text)' : 'var(--text-muted)', flex: 1, whiteSpace: 'pre-wrap', cursor: 'pointer' }}
+                              onClick={() => openEditNotes(scale.id)}
+                              title="Click to edit notes"
+                            >
+                              {noteRecord?.notes || 'Click to add notes…'}
+                            </span>
+                            <button className="btn btn-icon btn-sm" title="Edit notes" onClick={() => openEditNotes(scale.id)} style={{ flexShrink: 0 }}>✎</button>
+                          </div>
+                        )}
+                      </div>
+                      {lastUpdated && (
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          Last updated: {new Date(lastUpdated).toLocaleString()}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })
@@ -820,6 +898,12 @@ function FigureCostPanel() {
     return costs.filter(c => c.manufacturerId === manufacturerId);
   }
 
+  function getLastUpdatedForMfr(manufacturerId) {
+    const timestamps = getCostsForMfr(manufacturerId).map(c => c.updatedAt).filter(Boolean);
+    if (!timestamps.length) return null;
+    return timestamps.reduce((a, b) => (a > b ? a : b));
+  }
+
   function getCost(manufacturerId, scaleId, figureTypeId) {
     return costs.find(c => c.manufacturerId === manufacturerId && c.scaleId === scaleId && c.figureTypeId === figureTypeId) || null;
   }
@@ -1045,6 +1129,14 @@ function FigureCostPanel() {
                     style={{ width: '100%', minHeight: 60, fontSize: 13, resize: 'vertical' }}
                     placeholder="e.g. Free shipping over £50 · sold in packs of 4 · prices in GBP..."
                   />
+                  {(() => {
+                    const lastUpdated = getLastUpdatedForMfr(mfr.id);
+                    return lastUpdated ? (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                        Last updated: {new Date(lastUpdated).toLocaleString()}
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
               </div>
             );

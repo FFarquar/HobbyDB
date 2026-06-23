@@ -116,9 +116,10 @@ export async function mockRequest(method, path, body) {
   if (path === '/costs/paint') {
     if (method === 'GET') return store.paintCosts;
     if (method === 'PUT') {
+      const item = { ...body, updatedAt: new Date().toISOString() };
       const idx = store.paintCosts.findIndex(c => c.scaleId === body.scaleId && c.figureTypeId === body.figureTypeId && c.qualityId === body.qualityId);
-      if (idx === -1) store.paintCosts.push(body); else store.paintCosts[idx] = body;
-      return body;
+      if (idx === -1) store.paintCosts.push(item); else store.paintCosts[idx] = item;
+      return item;
     }
   }
   if (path === '/costs/basing') {
@@ -166,6 +167,16 @@ export async function mockRequest(method, path, body) {
       const idx = store.manufacturerNotes.findIndex(n => n.manufacturerId === body.manufacturerId);
       const item = { ...body, updatedAt: new Date().toISOString() };
       if (idx === -1) store.manufacturerNotes.push(item); else store.manufacturerNotes[idx] = item;
+      return item;
+    }
+  }
+  if (path === '/costs/paintratenotes') {
+    if (!store.paintRateNotes) store.paintRateNotes = [];
+    if (method === 'GET') return store.paintRateNotes;
+    if (method === 'PUT') {
+      const idx = store.paintRateNotes.findIndex(n => n.scaleId === body.scaleId);
+      const item = { ...body, updatedAt: new Date().toISOString() };
+      if (idx === -1) store.paintRateNotes.push(item); else store.paintRateNotes[idx] = item;
       return item;
     }
   }
@@ -337,10 +348,13 @@ export async function mockRequest(method, path, body) {
       for (const bc of (store.basingCosts || [])) {
         basingMap[`${bc.materialId}|${bc.sizeId}`] = bc.costAUD;
       }
+      const collectionNameMap = {};
+      for (const c of (store.collections || [])) collectionNameMap[c.id] = c.name || c.id;
+
       const collections = {};
       for (const item of store.items) {
         const colId = item.collectionId || 'unknown';
-        if (!collections[colId]) collections[colId] = { collectionId: colId, items: 0, totalValueAUD: 0 };
+        if (!collections[colId]) collections[colId] = { collectionId: colId, collectionName: collectionNameMap[colId] || colId, items: 0, totalValueAUD: 0 };
         collections[colId].items++;
         if (item.category === 'MINIATURE') {
           const qty = item.quantity || 1;
@@ -354,6 +368,9 @@ export async function mockRequest(method, path, body) {
             const basingRate = basingMap[`${item.baseMaterialId}|${item.baseSizeId}`] || 0;
             collections[colId].totalValueAUD += basingRate * nb;
           }
+        } else if (item.purchasePriceAmt) {
+          const currency = item.purchasePriceCurrency || 'AUD';
+          collections[colId].totalValueAUD += item.purchasePriceAmt * (rateMap[currency] || 1);
         }
       }
       return { reportType, collections: Object.values(collections) };

@@ -37,6 +37,10 @@ export const handler = async (event) => {
       if (method === 'PUT') return await addScaleFigureType(event);
       if (method === 'DELETE') return await removeScaleFigureType(event);
     }
+    if (path.includes('/costs/paintratenotes')) {
+      if (method === 'GET') return await getPaintRateNotes();
+      if (method === 'PUT') return await upsertPaintRateNote(event);
+    }
     return badRequest('Unknown cost endpoint');
   } catch (err) {
     return serverError(err);
@@ -275,4 +279,33 @@ async function removeScaleFigureType(event) {
     ConditionExpression: 'attribute_exists(PK)',
   }));
   return noContent();
+}
+
+// Paint rate notes per scale:  PK: PAINTRATENOTES#<scaleId>   SK: NOTES
+async function getPaintRateNotes() {
+  const result = await ddb.send(new ScanCommand({
+    TableName: TABLE_NAME,
+    FilterExpression: 'begins_with(PK, :prefix)',
+    ExpressionAttributeValues: { ':prefix': 'PAINTRATENOTES#' },
+  }));
+  return ok(result.Items || []);
+}
+
+async function upsertPaintRateNote(event) {
+  if (!requireAdmin(event)) return { statusCode: 403, headers: {}, body: JSON.stringify({ message: 'Admin only' }) };
+
+  const body = JSON.parse(event.body || '{}');
+  const { scaleId, notes } = body;
+  if (!scaleId) return badRequest('scaleId is required');
+
+  const item = {
+    PK: `PAINTRATENOTES#${scaleId}`,
+    SK: 'NOTES',
+    scaleId,
+    notes: notes || '',
+    updatedAt: now(),
+  };
+
+  await ddb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
+  return ok(item);
 }
