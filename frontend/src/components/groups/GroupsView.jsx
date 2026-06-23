@@ -108,9 +108,9 @@ export default function GroupsView({ collection, onBack }) {
             <div key={group.id} className="list-item" onClick={() => setSelectedGroup(group)}>
               <div className="list-item-content">
                 <div className="list-item-title">{group.name}</div>
-                {(group.scaleName || group.periodName) && (
+                {(group.scaleName || group.periodName || group.nationalityName) && (
                   <div className="list-item-subtitle">
-                    {[group.scaleName, group.periodName].filter(Boolean).join(' · ')}
+                    {[group.scaleName, group.periodName, group.nationalityName].filter(Boolean).join(' · ')}
                   </div>
                 )}
                 {group.description && <div className="list-item-subtitle">{group.description}</div>}
@@ -165,10 +165,13 @@ function GroupModal({ initial, groupLabel, category, onSave, onClose }) {
   const [notes, setNotes] = useState(initial?.notes || '');
   const [scaleId, setScaleId] = useState(initial?.scaleId || '');
   const [periodId, setPeriodId] = useState(initial?.periodId || '');
+  const [nationalityId, setNationalityId] = useState(initial?.nationalityId || '');
   const [scales, setScales] = useState([]);
   const [periods, setPeriods] = useState([]);
+  const [nationalities, setNationalities] = useState([]);
   const [showAddScale, setShowAddScale] = useState(false);
   const [showAddPeriod, setShowAddPeriod] = useState(false);
+  const [showAddNationality, setShowAddNationality] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pendingFiles, setPendingFiles] = useState([]);
   const galleryRef = useRef(null);
@@ -176,10 +179,19 @@ function GroupModal({ initial, groupLabel, category, onSave, onClose }) {
 
   const isMiniature = category === 'MINIATURE';
 
+  const autoName = isMiniature
+    ? [
+        scales.find(s => s.id === scaleId)?.label,
+        periods.find(p => p.id === periodId)?.label,
+        nationalities.find(n => n.id === nationalityId)?.label,
+      ].filter(Boolean).join(' - ')
+    : name;
+
   useEffect(() => {
     if (!isMiniature) return;
     getLookups('SCALE').then(setScales).catch(() => {});
     getLookups('PERIOD').then(setPeriods).catch(() => {});
+    getLookups('NATIONALITY').then(setNationalities).catch(() => {});
   }, [isMiniature]);
 
   async function handleSubmit(e) {
@@ -189,12 +201,15 @@ function GroupModal({ initial, groupLabel, category, onSave, onClose }) {
       if (galleryRef.current) await galleryRef.current.flush();
       const selectedScale = scales.find(s => s.id === scaleId);
       const selectedPeriod = periods.find(p => p.id === periodId);
+      const selectedNationality = nationalities.find(n => n.id === nationalityId);
       await onSave({
-        name, description, notes,
+        name: autoName, description, notes,
         scaleId: scaleId || null,
         scaleName: selectedScale?.label || '',
         periodId: periodId || null,
         periodName: selectedPeriod?.label || '',
+        nationalityId: nationalityId || null,
+        nationalityName: selectedNationality?.label || '',
       }, pendingFiles);
     } catch {
       // flush errors are toasted by ImageGallery; save errors by parent
@@ -226,18 +241,6 @@ function GroupModal({ initial, groupLabel, category, onSave, onClose }) {
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
-            <div className="form-group">
-              <label>Name *</label>
-              <input className="form-control" value={name} onChange={e => setName(e.target.value)} required autoFocus />
-            </div>
-            <div className="form-group">
-              <label>Description</label>
-              <input className="form-control" value={description} onChange={e => setDescription(e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label>Notes</label>
-              <textarea className="form-control" value={notes} onChange={e => setNotes(e.target.value)} />
-            </div>
             {isMiniature && (
               <>
                 <div className="form-group">
@@ -280,8 +283,48 @@ function GroupModal({ initial, groupLabel, category, onSave, onClose }) {
                     />
                   )}
                 </div>
+                <div className="form-group">
+                  <label>Country</label>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <select className="form-control" value={nationalityId} onChange={e => setNationalityId(e.target.value)}>
+                      <option value="">— select —</option>
+                      {nationalities.map(n => <option key={n.id} value={n.id}>{n.label}</option>)}
+                    </select>
+                    <button type="button" className="btn btn-icon" title="Add new Country"
+                      style={{ flexShrink: 0, fontSize: 18, lineHeight: 1 }}
+                      onClick={() => setShowAddNationality(true)}>+</button>
+                  </div>
+                  {showAddNationality && (
+                    <QuickAddModal
+                      type="NATIONALITY"
+                      label="Country"
+                      onSave={newItem => { setNationalities(prev => [...prev, newItem].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))); setNationalityId(newItem.id); setShowAddNationality(false); }}
+                      onClose={() => setShowAddNationality(false)}
+                    />
+                  )}
+                </div>
               </>
             )}
+            <div className="form-group">
+              <label>Name *</label>
+              <input
+                className="form-control"
+                value={isMiniature ? autoName : name}
+                onChange={isMiniature ? undefined : e => setName(e.target.value)}
+                disabled={isMiniature}
+                required={!isMiniature}
+                autoFocus={!isMiniature}
+                placeholder={isMiniature ? 'Auto-generated from Scale, Period and Country' : ''}
+              />
+            </div>
+            <div className="form-group">
+              <label>Description</label>
+              <input className="form-control" value={description} onChange={e => setDescription(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label>Notes</label>
+              <textarea className="form-control" value={notes} onChange={e => setNotes(e.target.value)} />
+            </div>
             {initial ? (
               <div className="form-group">
                 <ImageGallery ref={galleryRef} entityId={initial.id} />

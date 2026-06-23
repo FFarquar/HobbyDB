@@ -37,7 +37,7 @@ async function listGroups(collectionId) {
 async function createGroup(collectionId, event) {
   if (!collectionId) return badRequest('collectionId is required');
   const body = JSON.parse(event.body || '{}');
-  const { name, description, notes, scaleId, scaleName, periodId, periodName } = body;
+  const { name, description, notes, scaleId, scaleName, periodId, periodName, nationalityId, nationalityName } = body;
   if (!name) return badRequest('name is required');
 
   const id = newId();
@@ -56,6 +56,8 @@ async function createGroup(collectionId, event) {
     scaleName: scaleName || '',
     periodId: periodId || null,
     periodName: periodName || '',
+    nationalityId: nationalityId || null,
+    nationalityName: nationalityName || '',
     createdAt: timestamp,
     updatedAt: timestamp,
   };
@@ -79,6 +81,8 @@ async function updateGroup(collectionId, id, event) {
   if (body.scaleName !== undefined) { updates.push('scaleName = :scaleName'); exprValues[':scaleName'] = body.scaleName; }
   if (body.periodId !== undefined) { updates.push('periodId = :periodId'); exprValues[':periodId'] = body.periodId; }
   if (body.periodName !== undefined) { updates.push('periodName = :periodName'); exprValues[':periodName'] = body.periodName; }
+  if (body.nationalityId !== undefined) { updates.push('nationalityId = :nationalityId'); exprValues[':nationalityId'] = body.nationalityId; }
+  if (body.nationalityName !== undefined) { updates.push('nationalityName = :nationalityName'); exprValues[':nationalityName'] = body.nationalityName; }
 
   const result = await ddb.send(new UpdateCommand({
     TableName: TABLE_NAME,
