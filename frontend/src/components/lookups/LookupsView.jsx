@@ -1050,17 +1050,18 @@ function FigureCostPanel() {
                     </thead>
                     <tbody>
                       {mfrCosts.map(entry => {
+                        const isLegacy = !entry.materialId;
                         const key = `${mfr.id}|${entry.scaleId}|${entry.materialId}|${entry.figureTypeId}`;
                         const scaleLbl = scales.find(s => s.id === entry.scaleId)?.label || entry.scaleId;
-                        const matLbl = materials.find(m => m.id === entry.materialId)?.label || entry.materialId || '—';
+                        const matLbl = isLegacy ? '(delete & re-enter)' : (materials.find(m => m.id === entry.materialId)?.label || entry.materialId);
                         const ftLbl = figureTypes.find(f => f.id === entry.figureTypeId)?.label || entry.figureTypeId;
                         return (
-                          <tr key={key}>
+                          <tr key={key} style={isLegacy ? { opacity: 0.6 } : undefined}>
                             <td>{scaleLbl}</td>
-                            <td>{matLbl}</td>
+                            <td style={isLegacy ? { fontStyle: 'italic', color: 'var(--danger)' } : undefined}>{matLbl}</td>
                             <td>{ftLbl}</td>
                             <td>
-                              {editing === key ? (
+                              {!isLegacy && editing === key ? (
                                 <InlineFigureCostInput
                                   initialCost={entry.cost}
                                   initialCurrency={entry.currency}
@@ -1069,7 +1070,10 @@ function FigureCostPanel() {
                                   onCancel={() => setEditing(null)}
                                 />
                               ) : (
-                                <span style={{ cursor: 'pointer' }} onClick={() => { setEditing(key); setAddingMfrId(null); }}>
+                                <span
+                                  style={{ cursor: isLegacy ? 'default' : 'pointer' }}
+                                  onClick={isLegacy ? undefined : () => { setEditing(key); setAddingMfrId(null); }}
+                                >
                                   {entry.currency} {parseFloat(entry.cost).toFixed(2)}
                                 </span>
                               )}

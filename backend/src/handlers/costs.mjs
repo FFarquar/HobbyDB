@@ -160,16 +160,18 @@ async function deleteFigureCost(event) {
 
   const qs = event.queryStringParameters || {};
   const { manufacturerId, scaleId, figureTypeId, materialId } = qs;
-  if (!manufacturerId || !scaleId || !figureTypeId || !materialId) {
-    return badRequest('manufacturerId, scaleId, figureTypeId, and materialId query params are required');
+  if (!manufacturerId || !scaleId || !figureTypeId) {
+    return badRequest('manufacturerId, scaleId, and figureTypeId query params are required');
   }
+
+  // Legacy entries were keyed without materialId; new entries include it in the PK.
+  const pk = materialId
+    ? `FIGURECOST#${manufacturerId}#${scaleId}#${materialId}`
+    : `FIGURECOST#${manufacturerId}#${scaleId}`;
 
   await ddb.send(new DeleteCommand({
     TableName: TABLE_NAME,
-    Key: {
-      PK: `FIGURECOST#${manufacturerId}#${scaleId}#${materialId}`,
-      SK: `FIGURETYPE#${figureTypeId}`,
-    },
+    Key: { PK: pk, SK: `FIGURETYPE#${figureTypeId}` },
     ConditionExpression: 'attribute_exists(PK)',
   }));
   return noContent();

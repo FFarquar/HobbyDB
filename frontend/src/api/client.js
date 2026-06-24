@@ -85,8 +85,11 @@ export const upsertExchangeRate = (data) => api.put('/costs/exchange', data);
 export const deleteExchangeRate = (code) => api.delete(`/costs/exchange/${encodeURIComponent(code)}`);
 export const getFigureCosts = () => api.get('/costs/figure');
 export const upsertFigureCost = (data) => api.put('/costs/figure', data);
-export const deleteFigureCost = (manufacturerId, scaleId, figureTypeId, materialId) =>
-  api.delete(`/costs/figure?manufacturerId=${encodeURIComponent(manufacturerId)}&scaleId=${encodeURIComponent(scaleId)}&figureTypeId=${encodeURIComponent(figureTypeId)}&materialId=${encodeURIComponent(materialId)}`);
+export const deleteFigureCost = (manufacturerId, scaleId, figureTypeId, materialId) => {
+  const params = new URLSearchParams({ manufacturerId, scaleId, figureTypeId });
+  if (materialId) params.append('materialId', materialId);
+  return api.delete(`/costs/figure?${params}`);
+};
 export const getManufacturerNotes = () => api.get('/costs/mfrnotes');
 export const upsertManufacturerNote = (data) => api.put('/costs/mfrnotes', data);
 export const getPaintRateNotes = () => api.get('/costs/paintratenotes');
