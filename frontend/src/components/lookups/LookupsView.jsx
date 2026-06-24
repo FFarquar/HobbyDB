@@ -316,18 +316,23 @@ function PaintingRatesPanel() {
     return figureTypes.filter(ft => !linked.has(ft.id));
   }
 
-  function getCost(scaleId, figureTypeId, qualityId) {
-    return costs.find(c => c.scaleId === scaleId && c.figureTypeId === figureTypeId && c.qualityId === qualityId)?.costUSD ?? '';
+  function getCostRecord(scaleId, figureTypeId, qualityId) {
+    return costs.find(c => c.scaleId === scaleId && c.figureTypeId === figureTypeId && c.qualityId === qualityId) ?? null;
   }
 
-  async function handleSave(scaleId, figureTypeId, qualityId, val) {
+  async function handleSave(scaleId, figureTypeId, qualityId, val, notApplicable) {
     try {
-      const updated = await upsertPaintCost({ scaleId, figureTypeId, qualityId, costUSD: parseFloat(val) });
+      const payload = notApplicable === true
+        ? { scaleId, figureTypeId, qualityId, notApplicable: true }
+        : notApplicable === false
+        ? { scaleId, figureTypeId, qualityId, notApplicable: false }
+        : { scaleId, figureTypeId, qualityId, costUSD: parseFloat(val) };
+      const updated = await upsertPaintCost(payload);
       setCosts(cs => {
         const idx = cs.findIndex(c => c.scaleId === scaleId && c.figureTypeId === figureTypeId && c.qualityId === qualityId);
         return idx === -1 ? [...cs, updated] : cs.map((c, i) => i === idx ? updated : c);
       });
-      toast('Rate saved', 'success');
+      toast(notApplicable === true ? 'Marked N/A' : notApplicable === false ? 'N/A cleared' : 'Rate saved', 'success');
     } catch (err) { toast(err.message, 'error'); }
     finally { setEditing(null); }
   }
@@ -503,14 +508,26 @@ function PaintingRatesPanel() {
                             {scaleQualityNames.map((name, i) => {
                               const q = String(i + 1);
                               const key = `${scale.id}|${ft.id}|${q}`;
-                              const val = getCost(scale.id, ft.id, q);
+                              const record = getCostRecord(scale.id, ft.id, q);
+                              const isNA = record?.notApplicable === true;
+                              const val = isNA ? '' : (record?.costUSD ?? '');
                               return (
                                 <td key={q}>
                                   {editing === key ? (
-                                    <InlineCostInput initial={val} onSave={v => handleSave(scale.id, ft.id, q, v)} onCancel={() => setEditing(null)} />
+                                    <InlineCostInput
+                                      initial={val}
+                                      isNotApplicable={isNA}
+                                      onSave={v => handleSave(scale.id, ft.id, q, v)}
+                                      onMarkNA={() => handleSave(scale.id, ft.id, q, null, isNA ? false : true)}
+                                      onCancel={() => setEditing(null)}
+                                    />
                                   ) : (
-                                    <span style={{ cursor: 'pointer', color: val !== '' ? 'var(--text)' : 'var(--text-muted)' }} onClick={() => setEditing(key)}>
-                                      {val !== '' ? `$${parseFloat(val).toFixed(2)}` : '—'}
+                                    <span
+                                      style={{ cursor: 'pointer', color: isNA ? 'var(--text-muted)' : (val !== '' ? 'var(--text)' : 'var(--text-muted)') }}
+                                      onClick={() => setEditing(key)}
+                                      title={isNA ? 'Not applicable — click to change' : undefined}
+                                    >
+                                      {isNA ? 'N/A' : (val !== '' ? `$${parseFloat(val).toFixed(2)}` : '—')}
                                     </span>
                                   )}
                                 </td>
@@ -1241,7 +1258,7 @@ function InlineFigureCostInput({ initialCost, initialCurrency, currencies, onSav
 
 // ─── Shared inline cost input ────────────────────────────────────────────────
 
-function InlineCostInput({ initial, onSave, onCancel }) {
+function InlineCostInput({ initial, isNotApplicable, onSave, onMarkNA, onCancel }) {
   const [val, setVal] = useState(initial !== '' ? String(initial) : '');
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -1252,9 +1269,16 @@ function InlineCostInput({ initial, onSave, onCancel }) {
         onChange={e => setVal(e.target.value)}
         style={{ width: 72, padding: '3px 6px', fontSize: 13 }}
         autoFocus
-        onKeyDown={e => { if (e.key === 'Enter') onSave(val); if (e.key === 'Escape') onCancel(); }}
+        onKeyDown={e => { if (e.key === 'Enter' && val) onSave(val); if (e.key === 'Escape') onCancel(); }}
       />
-      <button className="btn btn-sm btn-primary" onClick={() => onSave(val)}>✓</button>
+      <button className="btn btn-sm btn-primary" onClick={() => onSave(val)} disabled={!val}>✓</button>
+      <button
+        className="btn btn-sm btn-ghost"
+        style={isNotApplicable ? { color: 'var(--accent)', borderColor: 'var(--accent)' } : {}}
+        onClick={onMarkNA}
+        title={isNotApplicable ? 'Clear N/A' : 'Mark as not applicable'}
+      >N/A</button>
+      <button className="btn btn-sm btn-ghost" onClick={onCancel}>✕</button>
     </div>
   );
 }

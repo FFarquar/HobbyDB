@@ -12,6 +12,10 @@ export const handler = async (event) => {
   const pathParams = event.pathParameters || {};
 
   try {
+    if (path.includes('/costs/paintratenotes')) {
+      if (method === 'GET') return await getPaintRateNotes();
+      if (method === 'PUT') return await upsertPaintRateNote(event);
+    }
     if (path.includes('/costs/paint')) {
       return method === 'GET' ? await getPaintCosts() : await upsertPaintCost(event);
     }
@@ -37,10 +41,6 @@ export const handler = async (event) => {
       if (method === 'PUT') return await addScaleFigureType(event);
       if (method === 'DELETE') return await removeScaleFigureType(event);
     }
-    if (path.includes('/costs/paintratenotes')) {
-      if (method === 'GET') return await getPaintRateNotes();
-      if (method === 'PUT') return await upsertPaintRateNote(event);
-    }
     return badRequest('Unknown cost endpoint');
   } catch (err) {
     return serverError(err);
@@ -60,9 +60,12 @@ async function upsertPaintCost(event) {
   if (!requireAdmin(event)) return { statusCode: 403, headers: {}, body: JSON.stringify({ message: 'Admin only' }) };
 
   const body = JSON.parse(event.body || '{}');
-  const { scaleId, figureTypeId, qualityId, costUSD } = body;
-  if (!scaleId || !figureTypeId || !qualityId || costUSD == null) {
-    return badRequest('scaleId, figureTypeId, qualityId, and costUSD are required');
+  const { scaleId, figureTypeId, qualityId, costUSD, notApplicable } = body;
+  if (!scaleId || !figureTypeId || !qualityId) {
+    return badRequest('scaleId, figureTypeId, and qualityId are required');
+  }
+  if (notApplicable === undefined && costUSD == null) {
+    return badRequest('costUSD is required');
   }
 
   const item = {
@@ -71,7 +74,8 @@ async function upsertPaintCost(event) {
     scaleId,
     figureTypeId,
     qualityId,
-    costUSD: Number(costUSD),
+    notApplicable: notApplicable === true,
+    ...(notApplicable !== true && costUSD != null ? { costUSD: Number(costUSD) } : {}),
     updatedAt: now(),
   };
 
