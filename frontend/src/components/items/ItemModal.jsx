@@ -633,7 +633,13 @@ function MiniatureFields({ form, set, lookups, scaleFigureTypes, paintCosts, bas
               <option value="">— select —</option>
               {scaleQualityNames
                 .map((name, i) => ({ name, id: i + 1 }))
-                .filter(({ name }) => name.toLowerCase() !== 'n/a')
+                .filter(({ id }) => {
+                  const figuresToCheck = figures.filter(f => f.figureTypeId);
+                  if (!figuresToCheck.length || !form.scaleId) return true;
+                  return figuresToCheck.every(f =>
+                    paintCosts.some(c => c.scaleId === form.scaleId && c.figureTypeId === f.figureTypeId && c.qualityId === String(id))
+                  );
+                })
                 .map(({ name, id }) => (
                   <option key={id} value={String(id)}>{name}</option>
                 ))}
