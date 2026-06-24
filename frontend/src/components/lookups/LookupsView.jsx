@@ -899,7 +899,24 @@ function FigureCostPanel() {
   }, []);
 
   function getCostsForMfr(manufacturerId) {
-    return costs.filter(c => c.manufacturerId === manufacturerId);
+    return costs
+      .filter(c => c.manufacturerId === manufacturerId)
+      .sort((a, b) => {
+        const scaleA = scales.find(s => s.id === a.scaleId)?.label || '';
+        const scaleB = scales.find(s => s.id === b.scaleId)?.label || '';
+        const numA = parseFloat(scaleA) || Infinity;
+        const numB = parseFloat(scaleB) || Infinity;
+        if (numA !== numB) return numA - numB;
+        const scaleCmp = scaleA.localeCompare(scaleB);
+        if (scaleCmp !== 0) return scaleCmp;
+        const matA = materials.find(m => m.id === a.materialId)?.label || '';
+        const matB = materials.find(m => m.id === b.materialId)?.label || '';
+        const matCmp = matA.localeCompare(matB);
+        if (matCmp !== 0) return matCmp;
+        const ftA = figureTypes.find(f => f.id === a.figureTypeId)?.label || '';
+        const ftB = figureTypes.find(f => f.id === b.figureTypeId)?.label || '';
+        return ftA.localeCompare(ftB);
+      });
   }
 
   function getLastUpdatedForMfr(manufacturerId) {

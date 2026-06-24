@@ -468,6 +468,22 @@ Resources:
             Method: DELETE
             Auth:
               Authorizer: LambdaAuthorizer
+        GetPaintRateNotes:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/paintratenotes
+            Method: GET
+            Auth:
+              Authorizer: LambdaAuthorizer
+        PutPaintRateNote:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HobbyDBApi
+            Path: /costs/paintratenotes
+            Method: PUT
+            Auth:
+              Authorizer: LambdaAuthorizer
 
   # ─── Lambda: Reports ──────────────────────────────────────────────────────────
   ReportsFunction:
