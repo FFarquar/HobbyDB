@@ -881,6 +881,7 @@ function FigureCostPanel() {
   const [costs, setCosts] = useState([]);
   const [currencies, setCurrencies] = useState([]);
   const [notesMap, setNotesMap] = useState({});
+  const [links, setLinks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
   const [addingMfrId, setAddingMfrId] = useState(null);
@@ -897,8 +898,9 @@ function FigureCostPanel() {
       getFigureCosts(),
       getExchangeRates(),
       getManufacturerNotes(),
+      getScaleFigureTypes(),
     ])
-      .then(([m, s, f, mat, c, rates, notes]) => {
+      .then(([m, s, f, mat, c, rates, notes, sft]) => {
         setManufacturers(m);
         setScales(s);
         setFigureTypes(f);
@@ -910,6 +912,7 @@ function FigureCostPanel() {
         const map = {};
         notes.forEach(n => { map[n.manufacturerId] = n.notes || ''; });
         setNotesMap(map);
+        setLinks(sft);
       })
       .catch(err => toast(err.message, 'error'))
       .finally(() => setLoading(false));
@@ -981,6 +984,11 @@ function FigureCostPanel() {
     try {
       const updated = await upsertFigureCost({ manufacturerId, scaleId, figureTypeId, materialId, cost: parseFloat(cost), currency });
       setCosts(cs => [...cs, updated]);
+      const alreadyLinked = links.some(l => l.scaleId === scaleId && l.figureTypeId === figureTypeId);
+      if (!alreadyLinked) {
+        const link = await addScaleFigureType({ scaleId, figureTypeId });
+        setLinks(ls => [...ls, link]);
+      }
       setAddingMfrId(null);
       toast('Price added', 'success');
     } catch (err) { toast(err.message, 'error'); }
