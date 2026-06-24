@@ -282,7 +282,7 @@ export async function mockRequest(method, path, body) {
       for (const er of (store.exchangeRates || [])) rateMap[er.currencyCode] = er.rateToAUD;
       const figureMap = {};
       for (const fc of (store.figureCosts || [])) {
-        figureMap[`${fc.manufacturerId}|${fc.scaleId}|${fc.figureTypeId}`] = fc;
+        figureMap[`${fc.manufacturerId}|${fc.scaleId}|${fc.materialId}|${fc.figureTypeId}`] = fc;
       }
       const paintMap = {};
       for (const pc of (store.paintCosts || [])) {
@@ -294,29 +294,42 @@ export async function mockRequest(method, path, body) {
       }
       const collectionMap = {};
       for (const c of (store.collections || [])) collectionMap[c.id] = c;
+      const figureTypeAbbrevMap = {};
+      for (const ft of (store.lookups?.FIGURETYPE || [])) {
+        figureTypeAbbrevMap[ft.id] = ft.abbreviation || ft.label || ft.id;
+      }
 
       const armies = [];
       for (const group of (store.groups || [])) {
         const collection = collectionMap[group.collectionId];
         if (!collection || collection.category !== 'MINIATURE') continue;
         const miniatures = store.items.filter(i => i.groupId === group.id && i.category === 'MINIATURE');
+        const postageInboundAUD = group.postageInboundAmt ? group.postageInboundAmt * (rateMap[group.postageInboundCurrency || 'AUD'] || 1) : 0;
+        const postageReturnAUD = group.postageReturnAmt ? group.postageReturnAmt * (rateMap[group.postageReturnCurrency || 'AUD'] || 1) : 0;
         let totalFigureCostAUD = 0, totalPaintCostAUD = 0, totalBasingCostAUD = 0;
         const items = miniatures.map(item => {
-          const qty = item.quantity || 1;
           const nb = item.numberBases || 0;
-          const totalFigs = qty * nb;
-          const fc = figureMap[`${item.manufacturerId}|${item.scaleId}|${item.figureTypeId}`];
-          const figureCostAUD = fc ? fc.cost * (rateMap[fc.currency] || 1) * totalFigs : 0;
-          const pc = paintMap[`${item.scaleId}|${item.figureTypeId}|${item.paintQualityId}`];
-          const paintCostAUD = pc ? pc.costUSD * (rateMap['USD'] || 1) * totalFigs : 0;
+          const figs = item.figures?.length
+            ? item.figures
+            : [{ figureTypeId: item.figureTypeId, figureTypeName: item.figureTypeName, quantity: item.quantity || 1 }];
+          let figureCostAUD = 0, paintCostAUD = 0;
+          for (const fig of figs) {
+            const totalFigs = (fig.quantity || 0) * nb;
+            const fc = figureMap[`${item.manufacturerId}|${item.scaleId}|${item.figureMaterialId}|${fig.figureTypeId}`];
+            if (fc) figureCostAUD += fc.cost * (rateMap[fc.currency] || 1) * totalFigs;
+            const pc = paintMap[`${item.scaleId}|${fig.figureTypeId}|${item.paintQualityId}`];
+            if (pc) paintCostAUD += pc.costUSD * (rateMap['USD'] || 1) * totalFigs;
+          }
           const basingCostAUD = (item.baseMaterialId && item.baseSizeId)
             ? (basingMap[`${item.baseMaterialId}|${item.baseSizeId}`] || 0) * nb : 0;
           totalFigureCostAUD += figureCostAUD;
           totalPaintCostAUD += paintCostAUD;
           totalBasingCostAUD += basingCostAUD;
+          const figureTypeName = figs.map(f => `${f.quantity} × ${figureTypeAbbrevMap[f.figureTypeId] || f.figureTypeName || f.figureTypeId}`).join(' & ');
+          const totalFigures = figs.reduce((s, f) => s + (f.quantity || 0), 0) * nb;
           return {
-            name: item.name, quantity: qty, numberBases: nb,
-            scaleName: item.scaleName || '', figureTypeName: item.figureTypeName || '',
+            name: item.name, totalFigures, numberBases: nb,
+            scaleName: item.scaleName || '', figureTypeName,
             manufacturerName: item.manufacturerName || '',
             figureCostAUD, paintCostAUD, basingCostAUD,
             totalAUD: figureCostAUD + paintCostAUD + basingCostAUD,
@@ -325,7 +338,8 @@ export async function mockRequest(method, path, body) {
         armies.push({
           groupId: group.id, groupName: group.name, collectionName: collection.name,
           totalFigureCostAUD, totalPaintCostAUD, totalBasingCostAUD,
-          totalAUD: totalFigureCostAUD + totalPaintCostAUD + totalBasingCostAUD,
+          postageInboundAUD, postageReturnAUD,
+          totalAUD: totalFigureCostAUD + totalPaintCostAUD + totalBasingCostAUD + postageInboundAUD + postageReturnAUD,
           items,
         });
       }

@@ -1,10 +1,10 @@
 import { QueryCommand, PutCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { ddb, TABLE_NAME, ok, noContent, badRequest, serverError, now, requireAdmin } from './_shared.mjs';
 
-// Paint cost matrix:    PK: PAINTCOST#<scaleId>#<figureTypeId>        SK: QUALITY#<qualityId>
-// Basing cost matrix:   PK: BASECOST#<materialId>                     SK: SIZE#<sizeId>
-// Exchange rates:       PK: EXCHANGERATE                              SK: CURRENCY#<code>
-// Figure cost matrix:   PK: FIGURECOST#<manufacturerId>#<scaleId>     SK: FIGURETYPE#<figureTypeId>
+// Paint cost matrix:    PK: PAINTCOST#<scaleId>#<figureTypeId>                    SK: QUALITY#<qualityId>
+// Basing cost matrix:   PK: BASECOST#<materialId>                                 SK: SIZE#<sizeId>
+// Exchange rates:       PK: EXCHANGERATE                                           SK: CURRENCY#<code>
+// Figure cost matrix:   PK: FIGURECOST#<manufacturerId>#<scaleId>#<materialId>    SK: FIGURETYPE#<figureTypeId>
 
 export const handler = async (event) => {
   const method = event.httpMethod || event.requestContext?.http?.method;
@@ -134,16 +134,17 @@ async function upsertFigureCost(event) {
   if (!requireAdmin(event)) return { statusCode: 403, headers: {}, body: JSON.stringify({ message: 'Admin only' }) };
 
   const body = JSON.parse(event.body || '{}');
-  const { manufacturerId, scaleId, figureTypeId, cost, currency } = body;
-  if (!manufacturerId || !scaleId || !figureTypeId || cost == null || !currency) {
-    return badRequest('manufacturerId, scaleId, figureTypeId, cost, and currency are required');
+  const { manufacturerId, scaleId, figureTypeId, materialId, cost, currency } = body;
+  if (!manufacturerId || !scaleId || !figureTypeId || !materialId || cost == null || !currency) {
+    return badRequest('manufacturerId, scaleId, figureTypeId, materialId, cost, and currency are required');
   }
 
   const item = {
-    PK: `FIGURECOST#${manufacturerId}#${scaleId}`,
+    PK: `FIGURECOST#${manufacturerId}#${scaleId}#${materialId}`,
     SK: `FIGURETYPE#${figureTypeId}`,
     manufacturerId,
     scaleId,
+    materialId,
     figureTypeId,
     cost: Number(cost),
     currency: currency.toUpperCase(),
@@ -158,15 +159,15 @@ async function deleteFigureCost(event) {
   if (!requireAdmin(event)) return { statusCode: 403, headers: {}, body: JSON.stringify({ message: 'Admin only' }) };
 
   const qs = event.queryStringParameters || {};
-  const { manufacturerId, scaleId, figureTypeId } = qs;
-  if (!manufacturerId || !scaleId || !figureTypeId) {
-    return badRequest('manufacturerId, scaleId, and figureTypeId query params are required');
+  const { manufacturerId, scaleId, figureTypeId, materialId } = qs;
+  if (!manufacturerId || !scaleId || !figureTypeId || !materialId) {
+    return badRequest('manufacturerId, scaleId, figureTypeId, and materialId query params are required');
   }
 
   await ddb.send(new DeleteCommand({
     TableName: TABLE_NAME,
     Key: {
-      PK: `FIGURECOST#${manufacturerId}#${scaleId}`,
+      PK: `FIGURECOST#${manufacturerId}#${scaleId}#${materialId}`,
       SK: `FIGURETYPE#${figureTypeId}`,
     },
     ConditionExpression: 'attribute_exists(PK)',

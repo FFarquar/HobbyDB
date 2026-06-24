@@ -37,7 +37,8 @@ async function listGroups(collectionId) {
 async function createGroup(collectionId, event) {
   if (!collectionId) return badRequest('collectionId is required');
   const body = JSON.parse(event.body || '{}');
-  const { name, description, notes, scaleId, scaleName, periodId, periodName, nationalityId, nationalityName } = body;
+  const { name, description, notes, scaleId, scaleName, periodId, periodName, nationalityId, nationalityName,
+          postageInboundAmt, postageInboundCurrency, postageReturnAmt, postageReturnCurrency } = body;
   if (!name) return badRequest('name is required');
 
   const id = newId();
@@ -58,6 +59,10 @@ async function createGroup(collectionId, event) {
     periodName: periodName || '',
     nationalityId: nationalityId || null,
     nationalityName: nationalityName || '',
+    postageInboundAmt: postageInboundAmt ?? null,
+    postageInboundCurrency: postageInboundCurrency || 'AUD',
+    postageReturnAmt: postageReturnAmt ?? null,
+    postageReturnCurrency: postageReturnCurrency || 'AUD',
     createdAt: timestamp,
     updatedAt: timestamp,
   };
@@ -83,6 +88,10 @@ async function updateGroup(collectionId, id, event) {
   if (body.periodName !== undefined) { updates.push('periodName = :periodName'); exprValues[':periodName'] = body.periodName; }
   if (body.nationalityId !== undefined) { updates.push('nationalityId = :nationalityId'); exprValues[':nationalityId'] = body.nationalityId; }
   if (body.nationalityName !== undefined) { updates.push('nationalityName = :nationalityName'); exprValues[':nationalityName'] = body.nationalityName; }
+  if (body.postageInboundAmt !== undefined) { updates.push('postageInboundAmt = :postageInboundAmt'); exprValues[':postageInboundAmt'] = body.postageInboundAmt; }
+  if (body.postageInboundCurrency !== undefined) { updates.push('postageInboundCurrency = :postageInboundCurrency'); exprValues[':postageInboundCurrency'] = body.postageInboundCurrency; }
+  if (body.postageReturnAmt !== undefined) { updates.push('postageReturnAmt = :postageReturnAmt'); exprValues[':postageReturnAmt'] = body.postageReturnAmt; }
+  if (body.postageReturnCurrency !== undefined) { updates.push('postageReturnCurrency = :postageReturnCurrency'); exprValues[':postageReturnCurrency'] = body.postageReturnCurrency; }
 
   const result = await ddb.send(new UpdateCommand({
     TableName: TABLE_NAME,

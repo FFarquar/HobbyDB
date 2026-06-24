@@ -14,6 +14,8 @@ function buildLastItemTemplate(items, category) {
     scaleName: last.scaleName,
     manufacturerId: last.manufacturerId,
     manufacturerName: last.manufacturerName,
+    figureMaterialId: last.figureMaterialId,
+    figureMaterialName: last.figureMaterialName,
     nationalityId: last.nationalityId,
     nationalityName: last.nationalityName,
     paintQualityId: last.paintQualityId,
@@ -84,7 +86,13 @@ export default function ItemsView({ collection, group, onBack }) {
     }
   }
 
-  const totalQty = items.reduce((s, i) => s + (i.quantity || 1), 0);
+  const totalQty = items.reduce((s, i) => {
+    if (i.category === 'MINIATURE') {
+      const figsPerBase = i.figures?.length ? i.figures.reduce((fs, f) => fs + (f.quantity || 0), 0) : (i.quantity || 1);
+      return s + figsPerBase * (i.numberBases || 0);
+    }
+    return s + (i.quantity || 1);
+  }, 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -158,14 +166,19 @@ function ItemCard({ item, scales, isAdmin, onEdit, onDelete }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
           <span style={{ fontWeight: 600 }}>{item.name}</span>
           <span className={`category-chip chip-${item.category}`}>{categoryLabel}</span>
-          <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>× {item.quantity || 1}</span>
+          {item.category !== 'MINIATURE' && (
+            <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>× {item.quantity || 1}</span>
+          )}
         </div>
 
         {item.category === 'MINIATURE' && (
           <div style={{ fontSize: 13, color: 'var(--text-muted)', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
             {item.scaleName && <span>Scale: {item.scaleName}</span>}
             {item.manufacturerName && <span>Mfr: {item.manufacturerName}</span>}
-            {item.figureTypeName && <span>Type: {item.figureTypeName}</span>}
+            {item.figureMaterialName && <span>Material: {item.figureMaterialName}</span>}
+            {item.figures?.length
+              ? <span>Composition: {item.figures.map(f => `${f.quantity}× ${f.figureTypeName}`).join(', ')}</span>
+              : item.figureTypeName && <span>Type: {item.figureTypeName}</span>}
             {item.paintQualityId && (() => {
               const scale = scales.find(s => s.id === item.scaleId);
               const name = scale?.qualityNames?.[parseInt(item.paintQualityId) - 1] ?? item.paintQualityName;

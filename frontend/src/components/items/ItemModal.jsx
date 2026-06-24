@@ -4,18 +4,22 @@ import { PAINT_QUALITY_LABELS } from '../../config.js';
 
 // Maps each lookup type to the form fields it populates
 const FIELD_MAP = {
-  SCALE:        ['scaleId',        'scaleName'],
-  MANUFACTURER: ['manufacturerId', 'manufacturerName'],
-  FIGURETYPE:   ['figureTypeId',   'figureTypeName'],
-  NATIONALITY:  ['nationalityId',  'nationalityName'],
-  BASESIZE:     ['baseSizeId',     'baseSizeName'],
-  BASEMATERIAL: ['baseMaterialId', 'baseMaterialName'],
+  SCALE:          ['scaleId',          'scaleName'],
+  MANUFACTURER:   ['manufacturerId',   'manufacturerName'],
+  FIGUREMATERIAL: ['figureMaterialId', 'figureMaterialName'],
+  NATIONALITY:    ['nationalityId',    'nationalityName'],
+  BASESIZE:       ['baseSizeId',       'baseSizeName'],
+  BASEMATERIAL:   ['baseMaterialId',   'baseMaterialName'],
 };
 
 export default function ItemModal({ initial, template, collectionCategory, onSave, onClose }) {
   const seed = initial || template || {};
   const [category, setCategory] = useState(seed.category || collectionCategory || 'MINIATURE');
-  const [form, setForm] = useState(seed);
+  // Migrate old single-type items (figureTypeId + quantity) to the figures[] array format
+  const migratedSeed = (!seed.figures && seed.figureTypeId)
+    ? { ...seed, figures: [{ figureTypeId: seed.figureTypeId, figureTypeName: seed.figureTypeName || '', quantity: seed.quantity || 1 }] }
+    : seed;
+  const [form, setForm] = useState({ ...migratedSeed, figures: migratedSeed.figures || [{ figureTypeId: null, figureTypeName: '', quantity: null }] });
   const [lookups, setLookups] = useState({});
   const [scaleFigureTypes, setScaleFigureTypes] = useState([]);
   const [paintCosts, setPaintCosts] = useState([]);
@@ -32,7 +36,7 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
   async function loadLookups() {
     setLoading(true);
     const types = category === 'MINIATURE'
-      ? ['SCALE', 'MANUFACTURER', 'FIGURETYPE', 'NATIONALITY', 'BASESIZE', 'BASEMATERIAL', 'PAINTQUALITY']
+      ? ['SCALE', 'MANUFACTURER', 'FIGUREMATERIAL', 'FIGURETYPE', 'NATIONALITY', 'BASESIZE', 'BASEMATERIAL', 'PAINTQUALITY']
       : ['SCALE'];
     const [results, sft, costs, baseCosts, figCosts, rates] = await Promise.all([
       Promise.all(types.map(t => getLookups(t).catch(() => []))),
@@ -90,19 +94,19 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
     }
   }
 
-  async function handleSetPaintCost(costUSD) {
+  async function handleSetPaintCost(figureTypeId, costUSD) {
     const scaleData = (lookups.SCALE || []).find(s => s.id === form.scaleId);
     const qualityId = (scaleData?.qualityNames?.length ?? 0) > 0 ? String(form.paintQualityId) : '0';
-    const entry = { scaleId: form.scaleId, figureTypeId: form.figureTypeId, qualityId, costUSD };
+    const entry = { scaleId: form.scaleId, figureTypeId, qualityId, costUSD };
     await upsertPaintCost(entry);
     setPaintCosts(prev => {
       const idx = prev.findIndex(c => c.scaleId === entry.scaleId && c.figureTypeId === entry.figureTypeId && c.qualityId === entry.qualityId);
       if (idx === -1) return [...prev, entry];
       const next = [...prev]; next[idx] = entry; return next;
     });
-    const alreadyLinked = scaleFigureTypes.some(l => l.scaleId === form.scaleId && l.figureTypeId === form.figureTypeId);
+    const alreadyLinked = scaleFigureTypes.some(l => l.scaleId === form.scaleId && l.figureTypeId === figureTypeId);
     if (!alreadyLinked) {
-      const link = await addScaleFigureType({ scaleId: form.scaleId, figureTypeId: form.figureTypeId });
+      const link = await addScaleFigureType({ scaleId: form.scaleId, figureTypeId });
       setScaleFigureTypes(prev => [...prev, link]);
     }
   }
@@ -117,33 +121,40 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
     });
   }
 
-  async function handleSetFigureCost(cost, currency) {
-    const entry = { manufacturerId: form.manufacturerId, scaleId: form.scaleId, figureTypeId: form.figureTypeId, cost, currency };
+  async function handleSetFigureCost(figureTypeId, cost, currency) {
+    const entry = { manufacturerId: form.manufacturerId, scaleId: form.scaleId, materialId: form.figureMaterialId, figureTypeId, cost, currency };
     await upsertFigureCost(entry);
     setFigureCosts(prev => {
-      const idx = prev.findIndex(c => c.manufacturerId === entry.manufacturerId && c.scaleId === entry.scaleId && c.figureTypeId === entry.figureTypeId);
+      const idx = prev.findIndex(c => c.manufacturerId === entry.manufacturerId && c.scaleId === entry.scaleId && c.materialId === entry.materialId && c.figureTypeId === entry.figureTypeId);
       if (idx === -1) return [...prev, entry];
       const next = [...prev]; next[idx] = entry; return next;
     });
   }
 
+  const figures = form.figures || [];
   const missingBasingCost = !loading && category === 'MINIATURE' && !!form.baseSizeId && !!form.baseMaterialId
     && !basingCosts.some(c => c.materialId === form.baseMaterialId && c.sizeId === form.baseSizeId);
-  const missingFigureCost = !loading && category === 'MINIATURE' && !!form.manufacturerId && !!form.scaleId && !!form.figureTypeId
-    && !figureCosts.some(c => c.manufacturerId === form.manufacturerId && c.scaleId === form.scaleId && c.figureTypeId === form.figureTypeId);
   const selectedScaleData = (lookups.SCALE || []).find(s => s.id === form.scaleId);
   const scaleHasQualityLevels = (selectedScaleData?.qualityNames?.length ?? 0) > 0;
   // For scales with no quality levels, use qualityId "0" (flat rate sentinel, never conflicts with real quality IDs 1-4)
   const effectivePaintQualityId = scaleHasQualityLevels ? form.paintQualityId : (form.scaleId ? '0' : null);
-  const missingPaintCost = !loading && category === 'MINIATURE' && !!form.scaleId && !!form.figureTypeId
-    && !!effectivePaintQualityId
-    && !paintCosts.some(c => c.scaleId === form.scaleId && c.figureTypeId === form.figureTypeId && c.qualityId === String(effectivePaintQualityId));
+
+  const missingFigureCosts = !loading && category === 'MINIATURE' && form.manufacturerId && form.scaleId && form.figureMaterialId
+    ? figures.filter(f => f.figureTypeId && !figureCosts.some(c => c.manufacturerId === form.manufacturerId && c.scaleId === form.scaleId && c.materialId === form.figureMaterialId && c.figureTypeId === f.figureTypeId))
+    : [];
+  const missingPaintCosts = !loading && category === 'MINIATURE' && form.scaleId && effectivePaintQualityId
+    ? figures.filter(f => f.figureTypeId && !paintCosts.some(c => c.scaleId === form.scaleId && c.figureTypeId === f.figureTypeId && c.qualityId === String(effectivePaintQualityId)))
+    : [];
+  const missingFigureCost = missingFigureCosts.length > 0;
+  const missingPaintCost = missingPaintCosts.length > 0;
+
   const missingMiniatureFields = category !== 'MINIATURE' ? [] : [
     [!form.scaleId,            'Scale'],
     [!form.manufacturerId,     'Manufacturer'],
-    [!form.figureTypeId,       'Figure Type'],
+    [!form.figureMaterialId,   'Figure Material'],
+    [figures.length === 0 || figures.some(f => !f.figureTypeId), 'Figure Type'],
+    [figures.length === 0 || figures.some(f => f.quantity == null), 'Figures per Base'],
     [!form.nationalityId,      'Nationality'],
-    [form.quantity == null,    'Figures per Base'],
     [form.numberBases == null, 'Number of Bases'],
     [scaleHasQualityLevels && !form.paintQualityId, 'Paint Quality'],
     [missingPaintCost,         'Painting Rate'],
@@ -156,21 +167,35 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
   // Calculated item value
   const rateMap = { AUD: 1.0 };
   for (const er of exchangeRates) rateMap[er.currencyCode] = er.rateToAUD;
-  const totalFigures = (form.quantity || 1) * (form.numberBases || 0);
+  const totalFigures = figures.reduce((s, f) => s + (f.quantity || 0), 0) * (form.numberBases || 0);
 
-  const selectedFigureCost = category === 'MINIATURE'
-    ? figureCosts.find(c => c.manufacturerId === form.manufacturerId && c.scaleId === form.scaleId && c.figureTypeId === form.figureTypeId)
-    : null;
-  const figureValueAUD = selectedFigureCost
-    ? selectedFigureCost.cost * (rateMap[selectedFigureCost.currency] || 1) * totalFigures
-    : null;
+  const figureDetails = [];
+  let figureValueAUD = null;
+  if (category === 'MINIATURE') {
+    for (const fig of figures) {
+      if (!fig.figureTypeId || !form.manufacturerId || !form.scaleId) continue;
+      const fc = figureCosts.find(c => c.manufacturerId === form.manufacturerId && c.scaleId === form.scaleId && c.materialId === form.figureMaterialId && c.figureTypeId === fig.figureTypeId);
+      if (fc) {
+        const qty = (fig.quantity || 0) * (form.numberBases || 0);
+        figureValueAUD = (figureValueAUD || 0) + fc.cost * (rateMap[fc.currency] || 1) * qty;
+        figureDetails.push({ qty, name: fig.figureTypeName, cost: fc.cost, currency: fc.currency });
+      }
+    }
+  }
 
-  const selectedPaintCost = category === 'MINIATURE' && effectivePaintQualityId
-    ? paintCosts.find(c => c.scaleId === form.scaleId && c.figureTypeId === form.figureTypeId && c.qualityId === String(effectivePaintQualityId))
-    : null;
-  const paintValueAUD = selectedPaintCost
-    ? selectedPaintCost.costUSD * (rateMap['USD'] || 1) * totalFigures
-    : null;
+  const paintDetails = [];
+  let paintValueAUD = null;
+  if (category === 'MINIATURE' && effectivePaintQualityId) {
+    for (const fig of figures) {
+      if (!fig.figureTypeId || !form.scaleId) continue;
+      const pc = paintCosts.find(c => c.scaleId === form.scaleId && c.figureTypeId === fig.figureTypeId && c.qualityId === String(effectivePaintQualityId));
+      if (pc) {
+        const qty = (fig.quantity || 0) * (form.numberBases || 0);
+        paintValueAUD = (paintValueAUD || 0) + pc.costUSD * (rateMap['USD'] || 1) * qty;
+        paintDetails.push({ qty, name: fig.figureTypeName, costUSD: pc.costUSD });
+      }
+    }
+  }
 
   const selectedBasingCost = category === 'MINIATURE'
     ? basingCosts.find(c => c.materialId === form.baseMaterialId && c.sizeId === form.baseSizeId)
@@ -211,8 +236,8 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
                 basingCosts={basingCosts}
                 exchangeRates={exchangeRates}
                 missingBasingCost={missingBasingCost}
-                missingFigureCost={missingFigureCost}
-                missingPaintCost={missingPaintCost}
+                missingFigureCosts={missingFigureCosts}
+                missingPaintCosts={missingPaintCosts}
                 onSetBasingCost={handleSetBasingCost}
                 onSetFigureCost={handleSetFigureCost}
                 onSetPaintCost={handleSetPaintCost}
@@ -237,20 +262,18 @@ export default function ItemModal({ initial, template, collectionCategory, onSav
                 <div style={{ fontWeight: 600, marginBottom: 6 }}>Calculated Value</div>
                 {figureValueAUD !== null && (
                   <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                    Figures: {totalFigures} figs
-                    {selectedFigureCost && ` × ${selectedFigureCost.currency} $${selectedFigureCost.cost}`}
-                    {selectedFigureCost && selectedFigureCost.currency !== 'AUD' && ` (× ${rateMap[selectedFigureCost.currency] || 1} rate)`}
-                    {' = '}
-                    <strong>AUD ${figureValueAUD.toFixed(2)}</strong>
+                    Figures ({figureDetails.length === 1
+                      ? `${figureDetails[0].qty} figs @ ${figureDetails[0].cost} ${figureDetails[0].currency} each`
+                      : figureDetails.map(d => `${d.qty}× ${d.name} @ ${d.cost} ${d.currency}`).join(', ')
+                    }): <strong>AUD ${figureValueAUD.toFixed(2)}</strong>
                   </div>
                 )}
                 {paintValueAUD !== null && (
                   <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                    Painting: {totalFigures} figs
-                    {selectedPaintCost && ` × USD $${selectedPaintCost.costUSD}`}
-                    {` (× ${(rateMap['USD'] || 1).toFixed(4)} USD→AUD)`}
-                    {' = '}
-                    <strong>AUD ${paintValueAUD.toFixed(2)}</strong>
+                    Painting ({paintDetails.length === 1
+                      ? `${paintDetails[0].qty} figs @ ${paintDetails[0].costUSD} USD each`
+                      : paintDetails.map(d => `${d.qty}× ${d.name} @ ${d.costUSD} USD`).join(', ')
+                    }): <strong>AUD ${paintValueAUD.toFixed(2)}</strong>
                   </div>
                 )}
                 {basingValueAUD !== null && (
@@ -497,16 +520,19 @@ function QuickAddQualityModal({ levelNumber, onSave, onClose }) {
 
 // ─── Category field groups ────────────────────────────────────────────────────
 
-function MiniatureFields({ form, set, lookups, scaleFigureTypes, paintCosts, basingCosts, exchangeRates, handleLookupChange, onQuickAdd, onUpdateScale, missingBasingCost, missingFigureCost, missingPaintCost, onSetBasingCost, onSetFigureCost, onSetPaintCost }) {
+function MiniatureFields({ form, set, lookups, scaleFigureTypes, paintCosts, basingCosts, exchangeRates, handleLookupChange, onQuickAdd, onUpdateScale, missingBasingCost, missingFigureCosts, missingPaintCosts, onSetBasingCost, onSetFigureCost, onSetPaintCost }) {
   const [showAddQuality, setShowAddQuality] = useState(false);
   const allFigureTypes = lookups.FIGURETYPE || [];
   const hasAnyLinks = scaleFigureTypes.length > 0;
+  const figureTypesWithAnyLink = hasAnyLinks ? new Set(scaleFigureTypes.map(l => l.figureTypeId)) : null;
 
-  const linkedForScale = hasAnyLinks && form.scaleId
-    ? allFigureTypes.filter(ft => scaleFigureTypes.some(l => l.scaleId === form.scaleId && l.figureTypeId === ft.id))
-    : null;
-  // Fall back to showing all types if the selected scale has no configured links yet
-  const filteredFigureTypes = linkedForScale?.length ? linkedForScale : allFigureTypes;
+  const filteredFigureTypes = hasAnyLinks && form.scaleId
+    ? allFigureTypes.filter(ft =>
+        scaleFigureTypes.some(l => l.scaleId === form.scaleId && l.figureTypeId === ft.id) ||
+        !figureTypesWithAnyLink.has(ft.id)
+      )
+    : allFigureTypes;
+  const figureTypeLookups = { ...lookups, FIGURETYPE: filteredFigureTypes };
 
   function handleScaleChange(id) {
     handleLookupChange('scaleId', 'scaleName', 'SCALE', id);
@@ -516,24 +542,31 @@ function MiniatureFields({ form, set, lookups, scaleFigureTypes, paintCosts, bas
       set('paintQualityId', null);
       set('paintQualityName', '');
     }
-    if (hasAnyLinks && id && form.figureTypeId) {
-      const stillValid = scaleFigureTypes.some(l => l.scaleId === id && l.figureTypeId === form.figureTypeId);
-      if (!stillValid) {
-        set('figureTypeId', null);
-        set('figureTypeName', '');
-      }
+    if (hasAnyLinks && id) {
+      const cleaned = (form.figures || []).map(f => {
+        const stillValid = scaleFigureTypes.some(l => l.scaleId === id && l.figureTypeId === f.figureTypeId);
+        return stillValid ? f : { ...f, figureTypeId: null, figureTypeName: '' };
+      });
+      set('figures', cleaned);
     }
   }
 
-  const figureTypeLookups = { ...lookups, FIGURETYPE: filteredFigureTypes };
+  function handleChangeRow(index, updated) {
+    const next = [...(form.figures || [])];
+    next[index] = updated;
+    set('figures', next);
+  }
+
+  function handleRemoveRow(index) {
+    set('figures', (form.figures || []).filter((_, i) => i !== index));
+  }
+
+  function handleAddRow() {
+    set('figures', [...(form.figures || []), { figureTypeId: null, figureTypeName: '', quantity: null }]);
+  }
 
   const selectedScale = (lookups.SCALE || []).find(s => s.id === form.scaleId);
   const scaleQualityNames = selectedScale?.qualityNames?.length ? selectedScale.qualityNames : [];
-
-  const missingRates = form.scaleId && form.figureTypeId && scaleQualityNames.length > 0
-    && scaleQualityNames.some((_, i) =>
-      !paintCosts.some(c => c.scaleId === form.scaleId && c.figureTypeId === form.figureTypeId && c.qualityId === String(i + 1))
-    );
 
   return (
     <>
@@ -547,33 +580,46 @@ function MiniatureFields({ form, set, lookups, scaleFigureTypes, paintCosts, bas
           onChange={id => handleLookupChange('manufacturerId', 'manufacturerName', 'MANUFACTURER', id)} />
       </div>
       <div className="form-row">
-        <LookupSelect label="Figure Type" type="FIGURETYPE" lookups={figureTypeLookups} onQuickAdd={onQuickAdd}
-          value={form.figureTypeId}
-          onChange={id => handleLookupChange('figureTypeId', 'figureTypeName', 'FIGURETYPE', id)} />
+        <LookupSelect label="Figure Material" type="FIGUREMATERIAL" lookups={lookups} onQuickAdd={onQuickAdd}
+          value={form.figureMaterialId}
+          onChange={id => handleLookupChange('figureMaterialId', 'figureMaterialName', 'FIGUREMATERIAL', id)} />
         <LookupSelect label="Nationality" type="NATIONALITY" lookups={lookups} onQuickAdd={onQuickAdd}
           value={form.nationalityId}
           onChange={id => handleLookupChange('nationalityId', 'nationalityName', 'NATIONALITY', id)} />
       </div>
-      {missingFigureCost && (
-        <div style={{ marginBottom: 12 }}>
-          <span style={{ fontSize: 12, color: 'var(--danger)' }}>
-            No figure cost set for <strong>{form.manufacturerName}</strong> {form.scaleName} {form.figureTypeName} — save is blocked.
-          </span>
-          <InlineCostSetter label="Cost per figure" onSet={onSetFigureCost} currencies={exchangeRates} />
-        </div>
-      )}
       <div className="form-row">
-        <div className="form-group">
-          <label>Figures per Base</label>
-          <input className="form-control" type="number" min="1" value={form.quantity ?? ''}
-            onChange={e => set('quantity', e.target.value !== '' ? parseInt(e.target.value) : null)} />
-        </div>
         <div className="form-group">
           <label>Number of Bases</label>
           <input className="form-control" type="number" min="0" value={form.numberBases ?? ''}
             onChange={e => set('numberBases', e.target.value !== '' ? parseInt(e.target.value) : null)} />
         </div>
       </div>
+      <div className="form-group">
+        <label>Composition per Base</label>
+        {(form.figures || []).map((fig, idx) => (
+          <FigureCompositionRow
+            key={idx}
+            figure={fig}
+            index={idx}
+            figureTypeLookups={figureTypeLookups}
+            onChangeRow={handleChangeRow}
+            onRemoveRow={handleRemoveRow}
+            canRemove={(form.figures || []).length > 1}
+            onQuickAdd={onQuickAdd}
+          />
+        ))}
+        <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 4 }} onClick={handleAddRow}>
+          + Add figure type
+        </button>
+      </div>
+      {missingFigureCosts.map(f => (
+        <div key={f.figureTypeId} style={{ marginBottom: 12 }}>
+          <span style={{ fontSize: 12, color: 'var(--danger)' }}>
+            No figure cost set for <strong>{form.manufacturerName}</strong> {form.scaleName} {form.figureMaterialName} {f.figureTypeName} — save is blocked.
+          </span>
+          <InlineCostSetter label="Cost per figure" onSet={(cost, currency) => onSetFigureCost(f.figureTypeId, cost, currency)} currencies={exchangeRates} />
+        </div>
+      ))}
       <div className="form-row">
         <div className="form-group">
           <label>Paint Quality</label>
@@ -617,14 +663,14 @@ function MiniatureFields({ form, set, lookups, scaleFigureTypes, paintCosts, bas
           )}
         </div>
       </div>
-      {missingPaintCost && (
-        <div style={{ marginBottom: 12 }}>
+      {missingPaintCosts.map(f => (
+        <div key={f.figureTypeId} style={{ marginBottom: 12 }}>
           <span style={{ fontSize: 12, color: 'var(--danger)' }}>
-            No painting rate set for {form.scaleName} {form.figureTypeName}{scaleQualityNames.length > 0 ? ' at this quality level' : ''} — save is blocked.
+            No painting rate set for {form.scaleName} {f.figureTypeName}{scaleQualityNames.length > 0 ? ' at this quality level' : ''} — save is blocked.
           </span>
-          <InlineCostSetter label="Painting rate per figure (USD)" onSet={onSetPaintCost} />
+          <InlineCostSetter label="Painting rate per figure (USD)" onSet={costUSD => onSetPaintCost(f.figureTypeId, costUSD)} />
         </div>
-      )}
+      ))}
       <div className="form-row">
         <LookupSelect label="Base Size" type="BASESIZE" lookups={lookups} onQuickAdd={onQuickAdd}
           value={form.baseSizeId}
@@ -678,6 +724,70 @@ function MiniatureFields({ form, set, lookups, scaleFigureTypes, paintCosts, bas
         </div>
       </div>
     </>
+  );
+}
+
+// ─── Figure composition row ───────────────────────────────────────────────────
+
+function FigureCompositionRow({ figure, index, figureTypeLookups, onChangeRow, onRemoveRow, canRemove, onQuickAdd }) {
+  const [showAdd, setShowAdd] = useState(false);
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+      <select
+        className="form-control"
+        value={figure.figureTypeId || ''}
+        onChange={e => {
+          const id = e.target.value;
+          const item = (figureTypeLookups.FIGURETYPE || []).find(l => l.id === id);
+          onChangeRow(index, { ...figure, figureTypeId: id || null, figureTypeName: item?.label || '' });
+        }}
+      >
+        <option value="">— type —</option>
+        {(figureTypeLookups.FIGURETYPE || []).map(ft => (
+          <option key={ft.id} value={ft.id}>{ft.label}</option>
+        ))}
+      </select>
+      <button
+        type="button"
+        className="btn btn-icon"
+        title="Add new figure type"
+        style={{ flexShrink: 0, fontSize: 18, lineHeight: 1 }}
+        onClick={() => setShowAdd(true)}
+      >
+        +
+      </button>
+      <input
+        className="form-control"
+        type="text"
+        inputMode="numeric"
+        style={{ width: 72 }}
+        value={figure.quantity ?? ''}
+        placeholder="Qty"
+        onChange={e => onChangeRow(index, { ...figure, quantity: e.target.value !== '' ? parseInt(e.target.value) : null })}
+      />
+      <button
+        type="button"
+        className="btn btn-icon"
+        title="Remove row"
+        style={{ flexShrink: 0, color: canRemove ? 'var(--danger)' : 'var(--text-muted)' }}
+        disabled={!canRemove}
+        onClick={() => onRemoveRow(index)}
+      >
+        ✕
+      </button>
+      {showAdd && (
+        <QuickAddModal
+          type="FIGURETYPE"
+          label="Figure Type"
+          onSave={newItem => {
+            onQuickAdd('FIGURETYPE', newItem);
+            onChangeRow(index, { ...figure, figureTypeId: newItem.id, figureTypeName: newItem.label });
+            setShowAdd(false);
+          }}
+          onClose={() => setShowAdd(false)}
+        />
+      )}
+    </div>
   );
 }
 

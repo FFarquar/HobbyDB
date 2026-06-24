@@ -21,8 +21,9 @@ const SIDEBAR = [
     items: [
       { key: 'SCALE',        label: 'Scales',          hint: 'e.g. 6mm, 10mm, 15mm, 25mm' },
       { key: 'MANUFACTURER', label: 'Manufacturers',   hint: 'e.g. AB Miniatures, Essex, Baccus' },
-      { key: 'FIGURETYPE',   label: 'Figure Types',    hint: 'e.g. Infantry, Cavalry, Tank, Gun' },
-      { key: 'NATIONALITY',  label: 'Nationalities',   hint: 'e.g. Roman, French, German' },
+      { key: 'FIGURETYPE',     label: 'Figure Types',     hint: 'e.g. Infantry, Cavalry, Tank, Gun' },
+      { key: 'FIGUREMATERIAL', label: 'Figure Materials', hint: 'e.g. Plastic, Metal, Resin, 3D Print' },
+      { key: 'NATIONALITY',    label: 'Nationalities',    hint: 'e.g. Roman, French, German' },
       { key: 'PERIOD',       label: 'Periods',         hint: 'e.g. Ancient, Napoleonic, WWII' },
       { key: 'BASESIZE',     label: 'Base Sizes',      hint: 'e.g. 40×40mm, 60×30mm' },
       { key: 'BASEMATERIAL', label: 'Base Materials',  hint: 'e.g. Metal, MDF, Plastic' },
@@ -859,14 +860,15 @@ function FigureCostPanel() {
   const [manufacturers, setManufacturers] = useState([]);
   const [scales, setScales] = useState([]);
   const [figureTypes, setFigureTypes] = useState([]);
+  const [materials, setMaterials] = useState([]);
   const [costs, setCosts] = useState([]);
   const [currencies, setCurrencies] = useState([]);
   const [notesMap, setNotesMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
   const [addingMfrId, setAddingMfrId] = useState(null);
-  const [addForm, setAddForm] = useState({ scaleId: '', figureTypeId: '', cost: '', currency: '' });
-  const [quickAdd, setQuickAdd] = useState(null); // 'scale' | 'figureType' | 'currency'
+  const [addForm, setAddForm] = useState({ scaleId: '', figureTypeId: '', materialId: '', cost: '', currency: '' });
+  const [quickAdd, setQuickAdd] = useState(null); // 'scale' | 'figureType' | 'material' | 'currency'
   const toast = useToast();
 
   useEffect(() => {
@@ -874,14 +876,16 @@ function FigureCostPanel() {
       getLookups('MANUFACTURER'),
       getLookups('SCALE'),
       getLookups('FIGURETYPE'),
+      getLookups('FIGUREMATERIAL'),
       getFigureCosts(),
       getExchangeRates(),
       getManufacturerNotes(),
     ])
-      .then(([m, s, f, c, rates, notes]) => {
+      .then(([m, s, f, mat, c, rates, notes]) => {
         setManufacturers(m);
         setScales(s);
         setFigureTypes(f);
+        setMaterials(mat);
         setCosts(c);
         const sorted = [...rates].sort((a, b) => a.currencyCode.localeCompare(b.currencyCode));
         setCurrencies(sorted);
@@ -904,8 +908,8 @@ function FigureCostPanel() {
     return timestamps.reduce((a, b) => (a > b ? a : b));
   }
 
-  function getCost(manufacturerId, scaleId, figureTypeId) {
-    return costs.find(c => c.manufacturerId === manufacturerId && c.scaleId === scaleId && c.figureTypeId === figureTypeId) || null;
+  function getCost(manufacturerId, scaleId, figureTypeId, materialId) {
+    return costs.find(c => c.manufacturerId === manufacturerId && c.scaleId === scaleId && c.figureTypeId === figureTypeId && c.materialId === materialId) || null;
   }
 
   function openAddForm(manufacturerId) {
@@ -915,17 +919,18 @@ function FigureCostPanel() {
     setAddForm({
       scaleId: last?.scaleId || '',
       figureTypeId: '',
+      materialId: last?.materialId || '',
       cost: '',
       currency: last?.currency || currencies[0]?.currencyCode || '',
     });
     setEditing(null);
   }
 
-  async function handleSave(manufacturerId, scaleId, figureTypeId, cost, currency) {
+  async function handleSave(manufacturerId, scaleId, figureTypeId, materialId, cost, currency) {
     try {
-      const updated = await upsertFigureCost({ manufacturerId, scaleId, figureTypeId, cost: parseFloat(cost), currency });
+      const updated = await upsertFigureCost({ manufacturerId, scaleId, figureTypeId, materialId, cost: parseFloat(cost), currency });
       setCosts(cs => {
-        const idx = cs.findIndex(c => c.manufacturerId === manufacturerId && c.scaleId === scaleId && c.figureTypeId === figureTypeId);
+        const idx = cs.findIndex(c => c.manufacturerId === manufacturerId && c.scaleId === scaleId && c.figureTypeId === figureTypeId && c.materialId === materialId);
         return idx === -1 ? [...cs, updated] : cs.map((c, i) => i === idx ? updated : c);
       });
       toast('Price saved', 'success');
@@ -934,23 +939,23 @@ function FigureCostPanel() {
   }
 
   async function handleAddSave(manufacturerId) {
-    const { scaleId, figureTypeId, cost, currency } = addForm;
-    if (getCost(manufacturerId, scaleId, figureTypeId)) {
-      toast('That scale / figure type combination already exists for this manufacturer', 'error');
+    const { scaleId, figureTypeId, materialId, cost, currency } = addForm;
+    if (getCost(manufacturerId, scaleId, figureTypeId, materialId)) {
+      toast('That scale / material / figure type combination already exists for this manufacturer', 'error');
       return;
     }
     try {
-      const updated = await upsertFigureCost({ manufacturerId, scaleId, figureTypeId, cost: parseFloat(cost), currency });
+      const updated = await upsertFigureCost({ manufacturerId, scaleId, figureTypeId, materialId, cost: parseFloat(cost), currency });
       setCosts(cs => [...cs, updated]);
       setAddingMfrId(null);
       toast('Price added', 'success');
     } catch (err) { toast(err.message, 'error'); }
   }
 
-  async function handleDelete(manufacturerId, scaleId, figureTypeId) {
+  async function handleDelete(manufacturerId, scaleId, figureTypeId, materialId) {
     try {
-      await deleteFigureCost(manufacturerId, scaleId, figureTypeId);
-      setCosts(cs => cs.filter(c => !(c.manufacturerId === manufacturerId && c.scaleId === scaleId && c.figureTypeId === figureTypeId)));
+      await deleteFigureCost(manufacturerId, scaleId, figureTypeId, materialId);
+      setCosts(cs => cs.filter(c => !(c.manufacturerId === manufacturerId && c.scaleId === scaleId && c.figureTypeId === figureTypeId && c.materialId === materialId)));
       toast('Price removed', 'success');
     } catch (err) { toast(err.message, 'error'); }
     finally { setEditing(null); }
@@ -980,6 +985,16 @@ function FigureCostPanel() {
       setAddForm(f => ({ ...f, figureTypeId: created.id }));
       setQuickAdd(null);
       toast('Figure type added', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
+  async function handleQuickAddMaterial(formData) {
+    try {
+      const created = await createLookup('FIGUREMATERIAL', formData);
+      setMaterials(m => [...m, created]);
+      setAddForm(f => ({ ...f, materialId: created.id }));
+      setQuickAdd(null);
+      toast('Material added', 'success');
     } catch (err) { toast(err.message, 'error'); }
   }
 
@@ -1014,7 +1029,7 @@ function FigureCostPanel() {
           manufacturers.map(mfr => {
             const mfrCosts = getCostsForMfr(mfr.id);
             const isAdding = addingMfrId === mfr.id;
-            const canAdd = !!(addForm.scaleId && addForm.figureTypeId && addForm.cost && addForm.currency);
+            const canAdd = !!(addForm.scaleId && addForm.figureTypeId && addForm.materialId && addForm.cost && addForm.currency);
             return (
               <div key={mfr.id} className="card" style={{ marginBottom: 0 }}>
                 <div className="card-header">
@@ -1027,6 +1042,7 @@ function FigureCostPanel() {
                     <thead>
                       <tr>
                         <th>Scale</th>
+                        <th>Material</th>
                         <th>Figure Type</th>
                         <th>Price</th>
                         <th style={{ width: 40 }}></th>
@@ -1034,12 +1050,14 @@ function FigureCostPanel() {
                     </thead>
                     <tbody>
                       {mfrCosts.map(entry => {
-                        const key = `${mfr.id}|${entry.scaleId}|${entry.figureTypeId}`;
+                        const key = `${mfr.id}|${entry.scaleId}|${entry.materialId}|${entry.figureTypeId}`;
                         const scaleLbl = scales.find(s => s.id === entry.scaleId)?.label || entry.scaleId;
+                        const matLbl = materials.find(m => m.id === entry.materialId)?.label || entry.materialId || '—';
                         const ftLbl = figureTypes.find(f => f.id === entry.figureTypeId)?.label || entry.figureTypeId;
                         return (
                           <tr key={key}>
                             <td>{scaleLbl}</td>
+                            <td>{matLbl}</td>
                             <td>{ftLbl}</td>
                             <td>
                               {editing === key ? (
@@ -1047,7 +1065,7 @@ function FigureCostPanel() {
                                   initialCost={entry.cost}
                                   initialCurrency={entry.currency}
                                   currencies={currencies}
-                                  onSave={(cost, currency) => handleSave(mfr.id, entry.scaleId, entry.figureTypeId, cost, currency)}
+                                  onSave={(cost, currency) => handleSave(mfr.id, entry.scaleId, entry.figureTypeId, entry.materialId, cost, currency)}
                                   onCancel={() => setEditing(null)}
                                 />
                               ) : (
@@ -1057,7 +1075,7 @@ function FigureCostPanel() {
                               )}
                             </td>
                             <td>
-                              <button className="btn btn-icon btn-sm" onClick={() => handleDelete(mfr.id, entry.scaleId, entry.figureTypeId)}>🗑️</button>
+                              <button className="btn btn-icon btn-sm" onClick={() => handleDelete(mfr.id, entry.scaleId, entry.figureTypeId, entry.materialId)}>🗑️</button>
                             </td>
                           </tr>
                         );
@@ -1072,6 +1090,15 @@ function FigureCostPanel() {
                                 {scales.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                               </select>
                               <button type="button" className="btn btn-icon btn-sm" title="Add new scale" onClick={() => setQuickAdd('scale')}>+</button>
+                            </div>
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                              <select className="form-control" value={addForm.materialId} onChange={e => setAddForm(f => ({ ...f, materialId: e.target.value }))} style={cellStyle}>
+                                <option value="">Material…</option>
+                                {materials.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                              </select>
+                              <button type="button" className="btn btn-icon btn-sm" title="Add new material" onClick={() => setQuickAdd('material')}>+</button>
                             </div>
                           </td>
                           <td>
@@ -1149,6 +1176,9 @@ function FigureCostPanel() {
       )}
       {quickAdd === 'figureType' && (
         <LookupModal singularLabel="Figure Type" onSave={handleQuickAddFigureType} onClose={() => setQuickAdd(null)} />
+      )}
+      {quickAdd === 'material' && (
+        <LookupModal singularLabel="Figure Material" showAbbreviation={false} onSave={handleQuickAddMaterial} onClose={() => setQuickAdd(null)} />
       )}
       {quickAdd === 'currency' && (
         <ExchangeRateModal onSave={handleQuickAddCurrency} onClose={() => setQuickAdd(null)} />

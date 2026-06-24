@@ -85,8 +85,8 @@ export const upsertExchangeRate = (data) => api.put('/costs/exchange', data);
 export const deleteExchangeRate = (code) => api.delete(`/costs/exchange/${encodeURIComponent(code)}`);
 export const getFigureCosts = () => api.get('/costs/figure');
 export const upsertFigureCost = (data) => api.put('/costs/figure', data);
-export const deleteFigureCost = (manufacturerId, scaleId, figureTypeId) =>
-  api.delete(`/costs/figure?manufacturerId=${encodeURIComponent(manufacturerId)}&scaleId=${encodeURIComponent(scaleId)}&figureTypeId=${encodeURIComponent(figureTypeId)}`);
+export const deleteFigureCost = (manufacturerId, scaleId, figureTypeId, materialId) =>
+  api.delete(`/costs/figure?manufacturerId=${encodeURIComponent(manufacturerId)}&scaleId=${encodeURIComponent(scaleId)}&figureTypeId=${encodeURIComponent(figureTypeId)}&materialId=${encodeURIComponent(materialId)}`);
 export const getManufacturerNotes = () => api.get('/costs/mfrnotes');
 export const upsertManufacturerNote = (data) => api.put('/costs/mfrnotes', data);
 export const getPaintRateNotes = () => api.get('/costs/paintratenotes');
@@ -111,21 +111,59 @@ export const registerImage = (data) => api.post('/images/register', data);
 export const deleteImage   = (key, entityId) =>
   api.delete(`/images?key=${encodeURIComponent(key)}&entityId=${encodeURIComponent(entityId)}`);
 
+const MAX_IMAGE_PX = 1920;
+const IMAGE_QUALITY = 0.82;
+const COMPRESS_THRESHOLD = 200 * 1024; // skip files already under 200 KB
+
+async function compressImage(file) {
+  if (file.size <= COMPRESS_THRESHOLD) return file;
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      const longest = Math.max(width, height);
+      if (longest > MAX_IMAGE_PX) {
+        const scale = MAX_IMAGE_PX / longest;
+        width  = Math.round(width  * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width  = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        blob => {
+          if (!blob || blob.size >= file.size) { resolve(file); return; }
+          const name = file.name.replace(/\.[^.]+$/, '.webp');
+          resolve(new File([blob], name, { type: 'image/webp' }));
+        },
+        'image/webp',
+        IMAGE_QUALITY,
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
 // Handles presigned-URL upload then registers metadata. In mock mode uses a data URL instead.
 export async function uploadImage(file, entityId) {
+  const compressed = await compressImage(file);
   if (USE_MOCK) {
     const dataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload  = () => resolve(reader.result);
       reader.onerror = reject;
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(compressed);
     });
-    const key = `mock/${Date.now()}-${file.name}`;
-    await registerImage({ entityId, key, filename: file.name, contentType: file.type, url: dataUrl });
+    const key = `mock/${Date.now()}-${compressed.name}`;
+    await registerImage({ entityId, key, filename: compressed.name, contentType: compressed.type, url: dataUrl });
     return key;
   }
-  const { uploadUrl, key } = await api.post('/images/upload-url', { filename: file.name, contentType: file.type, entityId });
-  await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
-  await registerImage({ entityId, key, filename: file.name, contentType: file.type });
+  const { uploadUrl, key } = await api.post('/images/upload-url', { filename: compressed.name, contentType: compressed.type, entityId });
+  await fetch(uploadUrl, { method: 'PUT', body: compressed, headers: { 'Content-Type': compressed.type } });
+  await registerImage({ entityId, key, filename: compressed.name, contentType: compressed.type });
   return key;
 }

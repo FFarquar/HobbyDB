@@ -7,7 +7,8 @@ import { ddb, TABLE_NAME, ok, created, noContent, badRequest, serverError, newId
 // Common fields: id, groupId, collectionId, category, name, quantity, notes, imageKeys[]
 //
 // Miniature-specific: scaleId, scaleName, manufacturerId, manufacturerName,
-//   figureTypeId, figureTypeName, nationalityId, periodId, rulesId,
+//   figureMaterialId, figureMaterialName,
+//   figures[]{figureTypeId, figureTypeName, quantity}, nationalityId, periodId, rulesId,
 //   paintQualityId, paintQualityName, baseSizeId, baseMaterialId,
 //   numberBases, purchasePriceAmt, purchasePriceCurrency
 //
@@ -90,8 +91,9 @@ function buildCategoryFields(category, body) {
         scaleName: body.scaleName || '',
         manufacturerId: body.manufacturerId || null,
         manufacturerName: body.manufacturerName || '',
-        figureTypeId: body.figureTypeId || null,
-        figureTypeName: body.figureTypeName || '',
+        figureMaterialId: body.figureMaterialId || null,
+        figureMaterialName: body.figureMaterialName || '',
+        figures: Array.isArray(body.figures) ? body.figures : [],
         nationalityId: body.nationalityId || null,
         periodId: body.periodId || null,
         rulesId: body.rulesId || null,
@@ -147,7 +149,7 @@ async function updateItem(groupId, id, event) {
   const exprNames = {};
 
   const simpleFields = ['quantity', 'notes', 'imageKeys', 'scaleId', 'scaleName',
-    'manufacturerId', 'manufacturerName', 'figureTypeId', 'figureTypeName',
+    'manufacturerId', 'manufacturerName', 'figureMaterialId', 'figureMaterialName',
     'nationalityId', 'periodId', 'rulesId', 'paintQualityId', 'paintQualityName',
     'baseSizeId', 'baseMaterialId', 'numberBases', 'purchasePriceAmt', 'purchasePriceCurrency',
     'publisher', 'minPlayers', 'maxPlayers', 'playTimeMinutes', 'bggId',
@@ -159,6 +161,11 @@ async function updateItem(groupId, id, event) {
       updates.push(`${field} = :${field}`);
       exprValues[`:${field}`] = body[field];
     }
+  }
+
+  if (Array.isArray(body.figures)) {
+    updates.push('figures = :figures');
+    exprValues[':figures'] = body.figures;
   }
 
   if (body.name !== undefined) {

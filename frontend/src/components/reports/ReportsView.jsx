@@ -184,6 +184,14 @@ function ValueByArmyResult({ data }) {
               <div className="stat-label">Basing Cost (AUD)</div>
             </div>
             <div className="stat-card">
+              <div className="stat-value">${(army.postageInboundAUD || 0).toFixed(0)}</div>
+              <div className="stat-label">Postage from Fig Seller (AUD)</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">${(army.postageReturnAUD || 0).toFixed(0)}</div>
+              <div className="stat-label">Return Postage to Painters (AUD)</div>
+            </div>
+            <div className="stat-card">
               <div className="stat-value">${army.totalAUD.toFixed(0)}</div>
               <div className="stat-label">Total (AUD)</div>
             </div>
@@ -196,9 +204,9 @@ function ValueByArmyResult({ data }) {
               <thead>
                 <tr>
                   <th>Item</th>
-                  <th>Figs/Base</th>
+                  <th>Total Figs</th>
                   <th>Bases</th>
-                  <th>Scale / Type</th>
+                  <th>Composition</th>
                   <th>Figure Cost (AUD)</th>
                   <th>Paint Cost (AUD)</th>
                   <th>Basing Cost (AUD)</th>
@@ -209,9 +217,9 @@ function ValueByArmyResult({ data }) {
                 {army.items.map((item, i) => (
                   <tr key={i}>
                     <td>{item.name}</td>
-                    <td>{item.quantity}</td>
+                    <td>{item.totalFigures}</td>
                     <td>{item.numberBases}</td>
-                    <td>{[item.scaleName, item.figureTypeName].filter(Boolean).join(' / ')}</td>
+                    <td>{item.figureTypeName}</td>
                     <td>${item.figureCostAUD.toFixed(2)}</td>
                     <td>${item.paintCostAUD.toFixed(2)}</td>
                     <td>${item.basingCostAUD.toFixed(2)}</td>

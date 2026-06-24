@@ -4,10 +4,10 @@ import { ddb, TABLE_NAME, ok, created, noContent, badRequest, notFound, serverEr
 // PK: LOOKUP#<TYPE>   SK: VALUE#<id>
 //
 // Valid lookup types:
-//   SCALE, MANUFACTURER, FIGURETYPE, NATIONALITY, PERIOD,
+//   SCALE, MANUFACTURER, FIGURETYPE, FIGUREMATERIAL, NATIONALITY, PERIOD,
 //   BASESIZE, BASEMATERIAL, PAINTQUALITY
 
-const VALID_TYPES = ['SCALE', 'MANUFACTURER', 'FIGURETYPE', 'NATIONALITY', 'PERIOD', 'BASESIZE', 'BASEMATERIAL', 'PAINTQUALITY'];
+const VALID_TYPES = ['SCALE', 'MANUFACTURER', 'FIGURETYPE', 'FIGUREMATERIAL', 'NATIONALITY', 'PERIOD', 'BASESIZE', 'BASEMATERIAL', 'PAINTQUALITY'];
 
 export const handler = async (event) => {
   const method = event.httpMethod || event.requestContext?.http?.method;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getGroups, createGroup, updateGroup, deleteGroup, uploadImage, getLookups, createLookup } from '../../api/client.js';
+import { getGroups, createGroup, updateGroup, deleteGroup, uploadImage, getLookups, createLookup, getExchangeRates } from '../../api/client.js';
 import { useToast } from '../Toast.jsx';
 import { useAuth } from '../../App.jsx';
 import ConfirmDialog from '../ConfirmDialog.jsx';
@@ -166,9 +166,14 @@ function GroupModal({ initial, groupLabel, category, onSave, onClose }) {
   const [scaleId, setScaleId] = useState(initial?.scaleId || '');
   const [periodId, setPeriodId] = useState(initial?.periodId || '');
   const [nationalityId, setNationalityId] = useState(initial?.nationalityId || '');
+  const [postageInboundAmt, setPostageInboundAmt] = useState(initial?.postageInboundAmt ?? '');
+  const [postageInboundCurrency, setPostageInboundCurrency] = useState(initial?.postageInboundCurrency || 'AUD');
+  const [postageReturnAmt, setPostageReturnAmt] = useState(initial?.postageReturnAmt ?? '');
+  const [postageReturnCurrency, setPostageReturnCurrency] = useState(initial?.postageReturnCurrency || 'AUD');
   const [scales, setScales] = useState([]);
   const [periods, setPeriods] = useState([]);
   const [nationalities, setNationalities] = useState([]);
+  const [exchangeRates, setExchangeRates] = useState([]);
   const [showAddScale, setShowAddScale] = useState(false);
   const [showAddPeriod, setShowAddPeriod] = useState(false);
   const [showAddNationality, setShowAddNationality] = useState(false);
@@ -192,6 +197,7 @@ function GroupModal({ initial, groupLabel, category, onSave, onClose }) {
     getLookups('SCALE').then(setScales).catch(() => {});
     getLookups('PERIOD').then(setPeriods).catch(() => {});
     getLookups('NATIONALITY').then(setNationalities).catch(() => {});
+    getExchangeRates().then(setExchangeRates).catch(() => {});
   }, [isMiniature]);
 
   async function handleSubmit(e) {
@@ -210,6 +216,10 @@ function GroupModal({ initial, groupLabel, category, onSave, onClose }) {
         periodName: selectedPeriod?.label || '',
         nationalityId: nationalityId || null,
         nationalityName: selectedNationality?.label || '',
+        postageInboundAmt: postageInboundAmt !== '' ? parseFloat(postageInboundAmt) : null,
+        postageInboundCurrency,
+        postageReturnAmt: postageReturnAmt !== '' ? parseFloat(postageReturnAmt) : null,
+        postageReturnCurrency,
       }, pendingFiles);
     } catch {
       // flush errors are toasted by ImageGallery; save errors by parent
@@ -302,6 +312,58 @@ function GroupModal({ initial, groupLabel, category, onSave, onClose }) {
                       onClose={() => setShowAddNationality(false)}
                     />
                   )}
+                </div>
+                <div className="form-group">
+                  <label>Postage — Manufacturer to Australia</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input
+                      className="form-control"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={postageInboundAmt}
+                      onChange={e => setPostageInboundAmt(e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                    <select
+                      className="form-control"
+                      style={{ width: 80 }}
+                      value={postageInboundCurrency}
+                      onChange={e => setPostageInboundCurrency(e.target.value)}
+                    >
+                      <option value="AUD">AUD</option>
+                      {exchangeRates.filter(r => r.currencyCode !== 'AUD').map(r => (
+                        <option key={r.currencyCode} value={r.currencyCode}>{r.currencyCode}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Return Postage &amp; Handling — Sri Lanka</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input
+                      className="form-control"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={postageReturnAmt}
+                      onChange={e => setPostageReturnAmt(e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                    <select
+                      className="form-control"
+                      style={{ width: 80 }}
+                      value={postageReturnCurrency}
+                      onChange={e => setPostageReturnCurrency(e.target.value)}
+                    >
+                      <option value="AUD">AUD</option>
+                      {exchangeRates.filter(r => r.currencyCode !== 'AUD').map(r => (
+                        <option key={r.currencyCode} value={r.currencyCode}>{r.currencyCode}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </>
             )}

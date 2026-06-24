@@ -9,9 +9,9 @@
     { "id": "col-book-01", "name": "Books & Publications", "category": "BOOK", "description": "Wargaming and history books", "ownerId": "GLOBAL", "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z" }
   ],
   "groups": [
-    { "id": "grp-romans-01", "collectionId": "col-miniature-01", "name": "Republican Romans", "description": "15mm Republican Roman army", "notes": "DBM Army list II/33", "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z" },
-    { "id": "grp-napoleon-01", "collectionId": "col-miniature-01", "name": "Napoleonic French", "description": "6mm Napoleonic French Corps", "notes": "For use with Grande Armée rules", "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z" },
-    { "id": "grp-twilight-01", "collectionId": "col-boardgame-01", "name": "Twilight Imperium", "description": "4th Edition + Prophecy of Kings", "notes": "", "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z" }
+    { "id": "grp-romans-01", "collectionId": "col-miniature-01", "name": "Republican Romans", "description": "15mm Republican Roman army", "notes": "DBM Army list II/33", "postageInboundAmt": 14.50, "postageInboundCurrency": "GBP", "postageReturnAmt": 28.00, "postageReturnCurrency": "AUD", "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z" },
+    { "id": "grp-napoleon-01", "collectionId": "col-miniature-01", "name": "Napoleonic French", "description": "6mm Napoleonic French Corps", "notes": "For use with Grande Armée rules", "postageInboundAmt": 8.75, "postageInboundCurrency": "GBP", "postageReturnAmt": 22.00, "postageReturnCurrency": "AUD", "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z" },
+    { "id": "grp-twilight-01", "collectionId": "col-boardgame-01", "name": "Twilight Imperium", "description": "4th Edition + Prophecy of Kings", "notes": "", "postageInboundAmt": null, "postageInboundCurrency": "AUD", "postageReturnAmt": null, "postageReturnCurrency": "AUD", "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z" }
   ],
   "items": [
     {
