@@ -161,9 +161,13 @@ function ItemCard({ item, scales, isAdmin, onEdit, onDelete }) {
   const categoryLabel = ITEM_CATEGORIES.find(c => c.value === item.category)?.label || item.category;
 
   return (
-    <div className="card" style={{ display: 'flex', gap: 12 }}>
+    <div
+      className="card"
+      style={{ display: 'flex', gap: 12, padding: '6px 16px', cursor: isAdmin ? 'pointer' : 'default' }}
+      onClick={isAdmin ? onEdit : undefined}
+    >
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
           <span style={{ fontWeight: 600 }}>{item.name}</span>
           <span className={`category-chip chip-${item.category}`}>{categoryLabel}</span>
           {item.category !== 'MINIATURE' && (
@@ -205,13 +209,12 @@ function ItemCard({ item, scales, isAdmin, onEdit, onDelete }) {
             {item.datePurchased && <span>Purchased: {item.datePurchased}</span>}
           </div>
         )}
-        {item.notes && <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4, fontStyle: 'italic' }}>{item.notes}</div>}
+        {item.notes && <div style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>{item.notes}</div>}
       </div>
 
       {isAdmin && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <button className="btn btn-icon" onClick={onEdit}>✏️</button>
-          <button className="btn btn-icon" onClick={onDelete}>🗑️</button>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <button className="btn btn-icon" onClick={e => { e.stopPropagation(); onDelete(); }}>🗑️</button>
         </div>
       )}
     </div>
