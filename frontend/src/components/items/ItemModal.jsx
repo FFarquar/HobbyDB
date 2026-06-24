@@ -631,9 +631,12 @@ function MiniatureFields({ form, set, lookups, scaleFigureTypes, paintCosts, bas
                 set('paintQualityName', id ? (scaleQualityNames[parseInt(id) - 1] ?? '') : '');
               }}>
               <option value="">— select —</option>
-              {scaleQualityNames.map((name, i) => (
-                <option key={i + 1} value={String(i + 1)}>{name}</option>
-              ))}
+              {scaleQualityNames
+                .map((name, i) => ({ name, id: i + 1 }))
+                .filter(({ name }) => name.toLowerCase() !== 'n/a')
+                .map(({ name, id }) => (
+                  <option key={id} value={String(id)}>{name}</option>
+                ))}
             </select>
             <button
               type="button"
