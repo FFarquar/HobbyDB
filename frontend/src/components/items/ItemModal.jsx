@@ -634,7 +634,7 @@ function MiniatureFields({ form, set, lookups, scaleFigureTypes, paintCosts, bas
               {scaleQualityNames
                 .map((name, i) => ({ name, id: i + 1 }))
                 .filter(({ id }) => {
-                  const figuresToCheck = figures.filter(f => f.figureTypeId);
+                  const figuresToCheck = (form.figures || []).filter(f => f.figureTypeId);
                   if (!figuresToCheck.length || !form.scaleId) return true;
                   return figuresToCheck.every(f =>
                     paintCosts.some(c => c.scaleId === form.scaleId && c.figureTypeId === f.figureTypeId && c.qualityId === String(id))
