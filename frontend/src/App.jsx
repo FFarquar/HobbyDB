@@ -27,10 +27,16 @@ function isTokenExpired(token) {
   }
 }
 
+// Namespaced by ENVIRONMENT so staging and prod (served from the same
+// GitHub Pages origin, different paths) don't clobber each other's auth in localStorage.
+const AUTH_TOKEN_KEY = `authToken:${ENVIRONMENT}`;
+const USER_ROLE_KEY = `userRole:${ENVIRONMENT}`;
+const USER_LOGIN_ID_KEY = `userLoginID:${ENVIRONMENT}`;
+
 function clearStoredAuth() {
-  localStorage.removeItem('authToken');
-  localStorage.removeItem('userRole');
-  localStorage.removeItem('userLoginID');
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(USER_ROLE_KEY);
+  localStorage.removeItem(USER_LOGIN_ID_KEY);
 }
 
 export default function App() {
@@ -38,9 +44,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    const role = localStorage.getItem('userRole');
-    const loginID = localStorage.getItem('userLoginID');
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    const role = localStorage.getItem(USER_ROLE_KEY);
+    const loginID = localStorage.getItem(USER_LOGIN_ID_KEY);
     if (token && role && loginID && !isTokenExpired(token)) {
       setAuth({ token, role, loginID });
     } else if (token) {
@@ -50,9 +56,9 @@ export default function App() {
   }, []);
 
   function handleLogin(authData) {
-    localStorage.setItem('authToken', authData.token);
-    localStorage.setItem('userRole', authData.role);
-    localStorage.setItem('userLoginID', authData.loginID);
+    localStorage.setItem(AUTH_TOKEN_KEY, authData.token);
+    localStorage.setItem(USER_ROLE_KEY, authData.role);
+    localStorage.setItem(USER_LOGIN_ID_KEY, authData.loginID);
     setAuth(authData);
   }
 

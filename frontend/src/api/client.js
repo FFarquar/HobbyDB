@@ -1,10 +1,11 @@
-import { API_BASE_URL, USE_MOCK } from '../config.js';
+import { API_BASE_URL, USE_MOCK, ENVIRONMENT } from '../config.js';
 
 let onUnauthorized = null;
 export function setUnauthorizedHandler(fn) { onUnauthorized = fn; }
 
+// Must match the namespaced key in App.jsx.
 function getToken() {
-  return localStorage.getItem('authToken') || '';
+  return localStorage.getItem(`authToken:${ENVIRONMENT}`) || '';
 }
 
 async function request(method, path, body, attempt = 0) {
