@@ -101,13 +101,13 @@ export const handler = async (event) => {
       loginID: user.loginID,
       role: user.role || 'USER',
       iat: now,
-      exp: now + 3600,
+      exp: now + 21600,
     });
 
     return {
       statusCode: 200,
       headers: corsHeaders,
-      body: JSON.stringify({ accessToken: token, token, tokenType: 'Bearer', expiresIn: 3600, role: user.role || 'USER' }),
+      body: JSON.stringify({ accessToken: token, token, tokenType: 'Bearer', expiresIn: 21600, role: user.role || 'USER' }),
     };
   } catch (err) {
     console.error(err);

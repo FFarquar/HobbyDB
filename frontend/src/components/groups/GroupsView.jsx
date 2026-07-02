@@ -41,7 +41,7 @@ export default function GroupsView({ collection, onBack }) {
       } else {
         const created = await createGroup(collection.id, formData);
         for (const { file } of pendingFiles) {
-          await uploadImage(file, created.id);
+          await uploadImage(file, created.id, created.name);
         }
         setGroups(gs => [...gs, created]);
         toast('Created', 'success');
@@ -389,7 +389,7 @@ function GroupModal({ initial, groupLabel, category, onSave, onClose }) {
             </div>
             {initial ? (
               <div className="form-group">
-                <ImageGallery ref={galleryRef} entityId={initial.id} />
+                <ImageGallery ref={galleryRef} entityId={initial.id} entityLabel={initial.name} />
               </div>
             ) : (
               <div className="form-group">

@@ -179,7 +179,7 @@ function CollectionModal({ initial, onSave, onClose }) {
             </div>
             {initial && (
               <div className="form-group">
-                <ImageGallery ref={galleryRef} entityId={initial.id} />
+                <ImageGallery ref={galleryRef} entityId={initial.id} entityLabel={initial.name} />
               </div>
             )}
           </div>

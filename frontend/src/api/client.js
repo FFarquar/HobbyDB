@@ -153,7 +153,7 @@ async function compressImage(file) {
 }
 
 // Handles presigned-URL upload then registers metadata. In mock mode uses a data URL instead.
-export async function uploadImage(file, entityId) {
+export async function uploadImage(file, entityId, entityLabel) {
   const compressed = await compressImage(file);
   if (USE_MOCK) {
     const dataUrl = await new Promise((resolve, reject) => {
@@ -166,7 +166,7 @@ export async function uploadImage(file, entityId) {
     await registerImage({ entityId, key, filename: compressed.name, contentType: compressed.type, url: dataUrl });
     return key;
   }
-  const { uploadUrl, key } = await api.post('/images/upload-url', { filename: compressed.name, contentType: compressed.type, entityId });
+  const { uploadUrl, key } = await api.post('/images/upload-url', { filename: compressed.name, contentType: compressed.type, entityId, entityLabel });
   await fetch(uploadUrl, { method: 'PUT', body: compressed, headers: { 'Content-Type': compressed.type } });
   await registerImage({ entityId, key, filename: compressed.name, contentType: compressed.type });
   return key;

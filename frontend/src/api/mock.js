@@ -20,8 +20,8 @@ export async function mockRequest(method, path, body) {
   if (path === '/login' && method === 'POST') {
     const user = store.users.find(u => u.loginID === body.loginID && u.password === body.password);
     if (!user || !user.active) throw Object.assign(new Error('Invalid credentials'), { status: 401 });
-    const token = btoa(JSON.stringify({ loginID: user.loginID, role: user.role, exp: Date.now() + 3600000 }));
-    return { accessToken: token, token, tokenType: 'Bearer', expiresIn: 3600, role: user.role };
+    const token = btoa(JSON.stringify({ loginID: user.loginID, role: user.role, exp: Date.now() + 21600000 }));
+    return { accessToken: token, token, tokenType: 'Bearer', expiresIn: 21600, role: user.role };
   }
 
   // ─── COLLECTIONS ──────────────────────────────────────────────────────────
