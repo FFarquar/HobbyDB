@@ -45,11 +45,17 @@ async function listImages(event) {
 
 async function getUploadUrl(event) {
   const body = JSON.parse(event.body || '{}');
-  const { filename, contentType, entityId } = body;
+  const { filename, contentType, entityId, entityLabel } = body;
   if (!filename || !contentType) return badRequest('filename and contentType are required');
 
   const safe = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const key  = `collections/${entityId || 'general'}/${Date.now()}-${safe}`;
+  const slug = (entityLabel || '')
+    .trim().toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+  const folder = slug ? `${slug}-${entityId || 'general'}` : (entityId || 'general');
+  const key  = `collections/${folder}/${Date.now()}-${safe}`;
   const cmd  = new PutObjectCommand({ Bucket: BUCKET, Key: key, ContentType: contentType });
   const uploadUrl = await getSignedUrl(s3, cmd, { expiresIn: 300 });
 

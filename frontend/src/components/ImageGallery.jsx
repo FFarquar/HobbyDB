@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } f
 import { getImages, uploadImage, deleteImage } from '../api/client.js';
 import { useToast } from './Toast.jsx';
 
-const ImageGallery = forwardRef(function ImageGallery({ entityId }, ref) {
+const ImageGallery = forwardRef(function ImageGallery({ entityId, entityLabel }, ref) {
   const [images,  setImages]  = useState([]);
   const [pending, setPending] = useState([]); // { file, previewUrl }
   const [loading, setLoading] = useState(true);
@@ -21,7 +21,7 @@ const ImageGallery = forwardRef(function ImageGallery({ entityId }, ref) {
     async flush() {
       if (pending.length === 0) return;
       for (const { file } of pending) {
-        await uploadImage(file, entityId); // throws on failure
+        await uploadImage(file, entityId, entityLabel); // throws on failure
       }
       pending.forEach(p => URL.revokeObjectURL(p.previewUrl));
       setPending([]);
